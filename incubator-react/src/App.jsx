@@ -1,121 +1,54 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useState, useEffect } from 'react';
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [temp, setTemp] = useState(37); // Aktuell
+  const [hum, setHum] = useState(60);
+  const [targetTemp, setTargetTemp] = useState(36.5);
+  const [targetHum, setTargetHum] = useState(50);
+  const [alarm, setAlarm] = useState(false);
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
+        <header className="text-center mb-12">
+          <h1 className="text-4xl font-bold text-gray-800">Incubator Dashboard</h1>
+          <p className="text-lg text-gray-600 mt-2">Version: {import.meta.env.APP_VERSION}</p>
+        </header>
 
-      <div className="ticks"></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
+          {/* Aktuelle Werte */}
+          <div className="bg-white p-8 rounded-2xl shadow-xl">
+            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Aktuell</h2>
+            <div className="space-y-4">
+              <div><span className="text-3xl font-bold text-blue-600">{temp}°C</span> Temp</div>
+              <div><span className="text-3xl font-bold text-green-600">{hum}%</span> Feuchte</div>
+            </div>
+          </div>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+          {/* Sollwerte Sliders */}
+          <div className="bg-white p-8 rounded-2xl shadow-xl">
+            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Sollwerte</h2>
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium mb-2">Temp: {targetTemp}°C</label>
+                <input type="range" min="30" max="40" step="0.1" value={targetTemp} onChange={e => setTargetTemp(e.target.value)} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Feuchte: {targetHum}%</label>
+                <input type="range" min="30" max="90" value={targetHum} onChange={e => setTargetHum(e.target.value)} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-500" />
+              </div>
+            </div>
+          </div>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+          {/* Alarm */}
+          <div className="bg-white p-8 rounded-2xl shadow-xl">
+            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Alarm</h2>
+            <button onClick={() => setAlarm(!alarm)} className={`w-full py-3 px-6 rounded-xl font-bold ${alarm ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-red-100'}`}>
+              {alarm ? 'Alarm AKTIV' : 'Alarm EIN'}
+            </button>
+          </div>
+        </div>
+      </div>
+  );
 }
 
-export default App
+export default App;
