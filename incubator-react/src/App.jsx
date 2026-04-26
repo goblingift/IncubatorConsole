@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import SensorDashboard from './components/SensorDashboard';
 
 function App() {
   const [temp, setTemp] = useState(37); // Aktuell
@@ -17,11 +18,8 @@ function App() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
           {/* Aktuelle Werte */}
           <div className="bg-white p-8 rounded-2xl shadow-xl">
-            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Aktuell</h2>
-            <div className="space-y-4">
-              <div><span className="text-3xl font-bold text-blue-600">{temp}°C</span> Temp</div>
-              <div><span className="text-3xl font-bold text-green-600">{hum}%</span> Feuchte</div>
-            </div>
+            <h2 className="text-2xl font-semibold text-gray-700 mb-4">Aktuelle Werte</h2>
+            <SensorDashboard />
           </div>
 
           {/* Sollwerte Sliders */}
