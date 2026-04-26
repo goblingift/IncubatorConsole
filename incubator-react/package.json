@@ -12,6 +12,8 @@
     "test-ui": "vitest --ui"
   },
   "dependencies": {
+    "@aws-amplify/ui-react": "^6.15.3",
+    "aws-amplify": "^6.16.4",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.14.2"

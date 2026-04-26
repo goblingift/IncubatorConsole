@@ -111,3 +111,46 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+.auth-wrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.auth-wrapper *,
+.auth-wrapper *::before,
+.auth-wrapper *::after {
+  box-sizing: border-box;
+}
+
+.auth-wrapper [data-amplify-authenticator] {
+  width: 100%;
+  max-width: 100%;
+  --amplify-components-authenticator-max-width: 100%;
+  --amplify-components-authenticator-form-padding: 0;
+  --amplify-components-authenticator-router-box-shadow: none;
+  --amplify-components-authenticator-router-border-width: 0;
+}
+
+.auth-wrapper [data-amplify-container],
+.auth-wrapper [data-amplify-router],
+.auth-wrapper form,
+.auth-wrapper .amplify-flex,
+.auth-wrapper .amplify-field,
+.auth-wrapper .amplify-field-group,
+.auth-wrapper .amplify-input,
+.auth-wrapper .amplify-select,
+.auth-wrapper .amplify-button {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.auth-wrapper .amplify-field-group__outer-end {
+  flex: 0 0 auto;
+}
+
+.auth-wrapper .amplify-tabs {
+  display: none;
+}
