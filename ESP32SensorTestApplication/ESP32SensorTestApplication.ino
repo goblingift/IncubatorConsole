@@ -5,6 +5,8 @@
 #include <multi_channel_relay.h>
 #include <U8g2lib.h>
 #include <SPI.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
 
 U8G2_SH1107_SEEED_128X128_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
@@ -12,11 +14,15 @@ INA226_WE ina226 = INA226_WE(0x40);  // Default I2C addr
 
 Multi_Channel_Relay relay;
 
-const byte BUZZER_PIN = A0;
+const byte BUZZER_PIN = D7;
 const byte HUMID_PIN = A1;
 const byte WATER_LVL_PIN = D2;
 
 #define WATER_SENSOR_PIN 3
+#define DS18B20_PIN 1
+
+OneWire oneWire(DS18B20_PIN);
+DallasTemperature sensors(&oneWire);
 
 SensirionI2cScd4x sensor;
 static int16_t error;
@@ -56,6 +62,10 @@ void setup() {
   // Initialize water level sensor
   pinMode(WATER_SENSOR_PIN, INPUT);
   checkWaterLevelAndNotify();
+
+  // Initialize DS18B20
+  sensors.begin();
+  Serial.println("DS18B20 initialized");
 
   // Initialize relay
   relay.begin(0x11);
@@ -103,6 +113,8 @@ void loop() {
     } else {
       printMeasurement(co2, temp, rh);
     }
+
+  measureDS18B20();
 
   u8g2.firstPage();
   do {
@@ -155,6 +167,22 @@ void testRelay() {
   relay.turn_on_channel(4);  
   delay(500);
   relay.turn_off_channel(4);
+}
+
+void measureDS18B20() {
+  Serial.print("Requesting temperatures from DS18B20");
+  sensors.requestTemperatures();
+  float tempC = sensors.getTempCByIndex(0);
+
+  if(tempC != DEVICE_DISCONNECTED_C) 
+  {
+    Serial.print("Temperature for DS18B20 is: ");
+    Serial.println(tempC);
+  } 
+  else
+  {
+    Serial.println("Error: Could not read temperature data from DS18B20");
+  }
 }
 
 void printMeasurement(uint16_t co2, float temp, float rh) {
