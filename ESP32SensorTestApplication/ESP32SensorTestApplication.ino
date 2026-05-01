@@ -12,6 +12,8 @@ INA226_WE ina226 = INA226_WE(0x40);  // Default I2C addr
 
 Multi_Channel_Relay relay;
 
+const byte BUZZER_PIN = A0;
+
 SensirionI2cScd4x sensor;
 static int16_t error;
 static char errorMessage[64];
@@ -38,6 +40,11 @@ void setup() {
   Serial.println("CO2, Temp, Humidity Sensor starts work!");
 
   u8g2.begin();
+
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(100);
+  digitalWrite(BUZZER_PIN, LOW);
 
   // Set I2C address and start relay
   relay.begin(0x11);
