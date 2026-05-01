@@ -6,13 +6,17 @@
 #include <U8g2lib.h>
 #include <SPI.h>
 
-U8G2_SH1107_SEEED_128X128_1_SW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);
+U8G2_SH1107_SEEED_128X128_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
 INA226_WE ina226 = INA226_WE(0x40);  // Default I2C addr
 
 Multi_Channel_Relay relay;
 
 const byte BUZZER_PIN = A0;
+const byte HUMID_PIN = A1;
+const byte WATER_LVL_PIN = D2;
+
+#define WATER_SENSOR_PIN 3
 
 SensirionI2cScd4x sensor;
 static int16_t error;
@@ -26,6 +30,8 @@ static char errorMessage[64];
 void setup() {
   Serial.begin(9600);
   Wire.begin();
+
+  // Initialize INA226- current/voltage sensor
   if (!ina226.init()) {
     Serial.println("INA226 not found!");
   }
@@ -34,21 +40,44 @@ void setup() {
   ina226.setMeasureMode(INA226_CONTINUOUS);  // Or TRIGGERED
   ina226.waitUntilConversionCompleted();  // Initial
 
+  // Initialize light sensor
   TSL2561.init();
 
+  // Initialize SCD41- CO2, Temp., Humid. sensor
   initializeSCD41();
   Serial.println("CO2, Temp, Humidity Sensor starts work!");
 
-  u8g2.begin();
-
+  // Initialize buzzer
   pinMode(BUZZER_PIN, OUTPUT);
   digitalWrite(BUZZER_PIN, HIGH);
-  delay(100);
+  delay(50);
   digitalWrite(BUZZER_PIN, LOW);
 
-  // Set I2C address and start relay
+  // Initialize water level sensor
+  pinMode(WATER_SENSOR_PIN, INPUT);
+  checkWaterLevelAndNotify();
+
+  // Initialize relay
   relay.begin(0x11);
   testRelay();
+
+  // Initialize humidifier
+  Serial.println("Test Humidifier for 2secs");
+  pinMode(HUMID_PIN, OUTPUT);
+  digitalWrite(HUMID_PIN, HIGH);
+  delay(2000);
+  digitalWrite(HUMID_PIN, LOW);
+
+  // Initialize OLED screen
+  u8g2.begin();
+  u8g2.firstPage();
+  do {
+    u8g2.setFont(u8g2_font_6x12_tr);
+    u8g2.drawStr(0, 24, "Incubator started!");
+  } while (u8g2.nextPage());
+  delay(2000);
+
+  Serial.println("Setup complete!");
 }
 
 void loop() {
@@ -78,9 +107,34 @@ void loop() {
   u8g2.firstPage();
   do {
     u8g2.setFont(u8g2_font_ncenB10_tr);
-    u8g2.drawStr(0,24,"Hello World!");
+    u8g2.drawStr(0,24,"Incubator started!");
   } while ( u8g2.nextPage() );
 
+}
+
+bool checkWaterLevelAndNotify() {
+  int waterLevel = digitalRead(WATER_SENSOR_PIN);
+  
+  if (waterLevel == HIGH) {
+    // Long beep alert
+    digitalWrite(BUZZER_PIN, HIGH);
+    delay(400);
+    digitalWrite(BUZZER_PIN, LOW);
+    delay(100);
+    digitalWrite(BUZZER_PIN, HIGH);
+    delay(50);
+    digitalWrite(BUZZER_PIN, LOW);
+    delay(100);
+    digitalWrite(BUZZER_PIN, HIGH);
+    delay(50);
+    digitalWrite(BUZZER_PIN, LOW);
+    
+    Serial.println("NO WATER - Add water!");
+    return false;  // No water
+  }
+  
+  Serial.println("Water OK");
+  return true;  // Water present
 }
 
 void testRelay() {
