@@ -3,7 +3,10 @@
 #include <Digital_Light_TSL2561.h>
 #include <SensirionI2cScd4x.h>
 #include <multi_channel_relay.h>
+#include <U8g2lib.h>
+#include <SPI.h>
 
+U8G2_SH1107_SEEED_128X128_1_SW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);
 
 INA226_WE ina226 = INA226_WE(0x40);  // Default I2C addr
 
@@ -34,6 +37,8 @@ void setup() {
   initializeSCD41();
   Serial.println("CO2, Temp, Humidity Sensor starts work!");
 
+  u8g2.begin();
+
   // Set I2C address and start relay
   relay.begin(0x11);
   testRelay();
@@ -62,6 +67,13 @@ void loop() {
     } else {
       printMeasurement(co2, temp, rh);
     }
+
+  u8g2.firstPage();
+  do {
+    u8g2.setFont(u8g2_font_ncenB10_tr);
+    u8g2.drawStr(0,24,"Hello World!");
+  } while ( u8g2.nextPage() );
+
 }
 
 void testRelay() {
