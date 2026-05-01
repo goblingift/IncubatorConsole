@@ -7,16 +7,20 @@
 #include <SPI.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include "HX711.h"
 
 U8G2_SH1107_SEEED_128X128_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
 INA226_WE ina226 = INA226_WE(0x40);  // Default I2C addr
-
+HX711 scale;
 Multi_Channel_Relay relay;
 
 const byte BUZZER_PIN = D7;
-const byte HUMID_PIN = A1;
+const byte HUMID_PIN = A9;
 const byte WATER_LVL_PIN = D2;
+const int DT_PIN  = 3;  // HX711 to ESP32S3 GPIO3/D2/A2
+const int SCK_PIN = 2;  // HX711 to ESP32S3 GPIO2/D1/A1
+const float HX711_CALIBRATION_FACTOR = 112.0392;
 
 #define WATER_SENSOR_PIN 3
 #define DS18B20_PIN 1
@@ -67,6 +71,12 @@ void setup() {
   sensors.begin();
   Serial.println("DS18B20 initialized");
 
+  // Initialize scale
+  scale.begin(DT_PIN, SCK_PIN);
+  scale.set_scale(HX711_CALIBRATION_FACTOR);
+  scale.tare(50);
+  Serial.println("Initialized HX711 scale");
+
   // Initialize relay
   relay.begin(0x11);
   testRelay();
@@ -116,10 +126,15 @@ void loop() {
 
   measureDS18B20();
 
+  float weight = scale.get_units(10);
+  Serial.print("Weight: ");
+  Serial.print(weight, 1);
+  Serial.println(" g");
+
   u8g2.firstPage();
   do {
     u8g2.setFont(u8g2_font_ncenB10_tr);
-    u8g2.drawStr(0,24,"Incubator started!");
+    u8g2.drawStr(0,24,"Incubator running!");
   } while ( u8g2.nextPage() );
 
 }
