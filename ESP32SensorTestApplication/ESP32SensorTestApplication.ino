@@ -2,8 +2,12 @@
 #include <INA226_WE.h>
 #include <Digital_Light_TSL2561.h>
 #include <SensirionI2cScd4x.h>
+#include <multi_channel_relay.h>
+
 
 INA226_WE ina226 = INA226_WE(0x40);  // Default I2C addr
+
+Multi_Channel_Relay relay;
 
 SensirionI2cScd4x sensor;
 static int16_t error;
@@ -19,7 +23,6 @@ void setup() {
   Wire.begin();
   if (!ina226.init()) {
     Serial.println("INA226 not found!");
-    while (1);
   }
   ina226.setAverage(INA226_AVERAGE_16);  // Smooth
   ina226.setConversionTime(INA226_CONV_TIME_1100);  // µs
@@ -30,6 +33,10 @@ void setup() {
 
   initializeSCD41();
   Serial.println("CO2, Temp, Humidity Sensor starts work!");
+
+  // Set I2C address and start relay
+  relay.begin(0x11);
+  testRelay();
 }
 
 void loop() {
@@ -57,7 +64,25 @@ void loop() {
     }
 }
 
-
+void testRelay() {
+  /* Begin Controlling Relay */ 
+  DEBUG_PRINT.println("Channel 1 on");
+  relay.turn_on_channel(1);  
+  delay(500);
+  DEBUG_PRINT.println("Channel 2 on");
+  relay.turn_off_channel(1);
+  relay.turn_on_channel(2);
+  delay(500);
+  DEBUG_PRINT.println("Channel 3 on");
+  relay.turn_off_channel(2);
+  relay.turn_on_channel(3);  
+  delay(500);
+  DEBUG_PRINT.println("Channel 4 on");
+  relay.turn_off_channel(3);
+  relay.turn_on_channel(4);  
+  delay(500);
+  relay.turn_off_channel(4);
+}
 
 void printMeasurement(uint16_t co2, float temp, float rh) {
     Serial.print("CO2 concentration [ppm]: ");
