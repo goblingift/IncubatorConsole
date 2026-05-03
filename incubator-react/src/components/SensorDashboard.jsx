@@ -23,8 +23,8 @@ export default function SensorDashboard() {
 
     const timestamp = new Date(Number(data.timestamp)).toLocaleString("de-DE");
 
-    const targetTemp     = settings?.target_temperature != null ? `${Number(settings.target_temperature).toFixed(1)} °C` : null;
-    const targetHumidity = settings?.target_humidity    != null ? `${Number(settings.target_humidity)} %`               : null;
+    const targetTemp     = settings?.temperature_target != null ? `${Number(settings.temperature_target).toFixed(1)} °C` : null;
+    const targetHumidity = settings?.humidity_target   != null ? `${Number(settings.humidity_target)} %`                : null;
 
     return (
         <div className="space-y-4">

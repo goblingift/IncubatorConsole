@@ -8,6 +8,10 @@ export function useSensorData(deviceId, intervalMs = 10000) {
     const [error, setError]     = useState(null);
 
     useEffect(() => {
+        setData(null);
+        setLoading(true);
+        setError(null);
+
         if (!deviceId) {
             setLoading(false);
             return;
