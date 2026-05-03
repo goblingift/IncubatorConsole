@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { fetchAuthSession } from 'aws-amplify/auth';
+import { useDevice } from '../context/DeviceContext';
 
 const SETTINGS_API_URL = import.meta.env.VITE_SETTINGS_API_URL;
 
 export default function SettingsPage() {
+    const { selectedDeviceId } = useDevice();
     const [targetTemperature, setTargetTemperature] = useState(36.5);
     const [targetHumidity, setTargetHumidity] = useState(50);
 
@@ -19,7 +21,7 @@ export default function SettingsPage() {
                 setErrorMessage('');
                 setStatusMessage('');
 
-                const response = await fetch(SETTINGS_API_URL, {
+                const response = await fetch(`${SETTINGS_API_URL}/${selectedDeviceId}`, {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',
@@ -63,13 +65,14 @@ export default function SettingsPage() {
                 throw new Error('Kein ID-Token gefunden. Bitte neu anmelden.');
             }
 
-            const response = await fetch(SETTINGS_API_URL, {
+            const response = await fetch(`${SETTINGS_API_URL}/${selectedDeviceId}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${idToken}`,
                 },
                 body: JSON.stringify({
+                    device_id: selectedDeviceId,
                     target_temperature: targetTemperature,
                     target_humidity: targetHumidity,
                 }),

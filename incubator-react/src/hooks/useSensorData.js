@@ -1,16 +1,22 @@
 import { useState, useEffect } from "react";
 
-export function useSensorData(intervalMs = 10000) {
+const BASE_URL = import.meta.env.VITE_API_URL;
+
+export function useSensorData(deviceId, intervalMs = 10000) {
     const [data, setData]       = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError]     = useState(null);
 
     useEffect(() => {
+        if (!deviceId) {
+            setLoading(false);
+            return;
+        }
+
         const fetchData = async () => {
             try {
-                const res  = await fetch(import.meta.env.VITE_API_URL);
+                const res  = await fetch(`${BASE_URL}/${deviceId}`);
                 const json = await res.json();
-                // API Gateway wraps body as a string → parse it
                 const body = typeof json.body === "string" ? JSON.parse(json.body) : json;
                 setData(body);
                 setError(null);
@@ -24,7 +30,7 @@ export function useSensorData(intervalMs = 10000) {
         fetchData();
         const interval = setInterval(fetchData, intervalMs);
         return () => clearInterval(interval);
-    }, [intervalMs]);
+    }, [deviceId, intervalMs]);
 
     return { data, loading, error };
 }
