@@ -27,6 +27,9 @@ const float HX711_CALIBRATION_FACTOR = 112.0392;
 
 #define WATER_SENSOR_PIN 3
 #define DS18B20_PIN 1
+#define WTR_LVL_THRESHOLD 100
+#define WTR_LVL_HIGH_ADDR 0x78
+#define WTR_LVL_LOW_ADDR  0x77
 
 OneWire oneWire(DS18B20_PIN);
 DallasTemperature sensors(&oneWire);
@@ -35,6 +38,8 @@ SensirionI2cScd4x sensor;
 static int16_t error;
 static char errorMessage[64];
 int lastState = HIGH;
+byte WTR_LVL_lowData[8];
+byte WTR_LVL_highData[12];
 
 #ifdef NO_ERROR
 #undef NO_ERROR
@@ -66,7 +71,9 @@ void setup() {
   playSoundNotification();
 
   // Initialize water level sensor
-  // TODO
+  Serial.print("Water level: ");
+  Serial.print(WTR_LVL_readPercent());
+  Serial.println("%");
 
   // Initialize input button
   pinMode(buttonPin, INPUT);
@@ -156,31 +163,6 @@ void loop() {
     u8g2.setFont(u8g2_font_ncenB10_tr);
     u8g2.drawStr(0, 24, "Incubator running!");
   } while (u8g2.nextPage());
-}
-
-bool checkWaterLevelAndNotify() {
-  int waterLevel = digitalRead(WATER_SENSOR_PIN);
-
-  if (waterLevel == HIGH) {
-    // Long beep alert
-    digitalWrite(BUZZER_PIN, HIGH);
-    delay(400);
-    digitalWrite(BUZZER_PIN, LOW);
-    delay(100);
-    digitalWrite(BUZZER_PIN, HIGH);
-    delay(50);
-    digitalWrite(BUZZER_PIN, LOW);
-    delay(100);
-    digitalWrite(BUZZER_PIN, HIGH);
-    delay(50);
-    digitalWrite(BUZZER_PIN, LOW);
-
-    Serial.println("NO WATER - Add water!");
-    return false;  // No water
-  }
-
-  Serial.println("Water OK");
-  return true;  // Water present
 }
 
 void testRelay() {
@@ -299,4 +281,33 @@ void playSoundNotification() {
   tone(BUZZER_PIN, 1200);  // high tone
   delay(40);
   noTone(BUZZER_PIN);
+}
+
+void WTR_LVL_readBytes(byte addr, byte *buf, byte len) {
+  Wire.requestFrom(addr, len);
+  while (Wire.available() < len);
+  for (byte i = 0; i < len; i++) buf[i] = Wire.read();
+}
+
+int WTR_LVL_readPercent() {
+  uint32_t WTR_LVL_mask = 0;
+
+  WTR_LVL_readBytes(WTR_LVL_LOW_ADDR, WTR_LVL_lowData, 8);
+  WTR_LVL_readBytes(WTR_LVL_HIGH_ADDR, WTR_LVL_highData, 12);
+
+  for (byte i = 0; i < 8; i++) {
+    if (WTR_LVL_lowData[i] > WTR_LVL_THRESHOLD) WTR_LVL_mask |= (1UL << i);
+  }
+
+  for (byte i = 0; i < 12; i++) {
+    if (WTR_LVL_highData[i] > WTR_LVL_THRESHOLD) WTR_LVL_mask |= (1UL << (8 + i));
+  }
+
+  byte WTR_LVL_sections = 0;
+  while (WTR_LVL_mask & 1) {
+    WTR_LVL_sections++;
+    WTR_LVL_mask >>= 1;
+  }
+
+  return WTR_LVL_sections * 5;
 }
