@@ -38,6 +38,9 @@ const int buttonPin = D2;
 const int DT_PIN = 3;
 const int SCK_PIN = 2;
 const float HX711_CALIBRATION_FACTOR = 112.0392;
+const int soundSensorPinAdc = A8;
+
+TaskHandle_t soundTaskHandle = NULL;
 
 #define DS18B20_PIN 1
 #define WTR_LVL_THRESHOLD 100
@@ -54,6 +57,7 @@ void playSoundNotification();
 void WTR_LVL_readBytes(byte addr, byte *buf, byte len);
 int WTR_LVL_readPercent();
 int WTR_LVL_readPercentStable(uint8_t samples = 15, uint16_t delayMs = 120);
+void soundRecorderTask(void *parameter);
 
 void setup() {
   Serial.begin(9600);
@@ -113,6 +117,16 @@ void setup() {
   } while (u8g2.nextPage());
   delay(2000);
 
+  xTaskCreatePinnedToCore(
+    soundRecorderTask,
+    "SoundRecorder",
+    4096,
+    NULL,
+    1,
+    &soundTaskHandle,
+    1
+  );
+
   Serial.println("Setup complete!");
 }
 
@@ -166,6 +180,31 @@ void loop() {
   } while (u8g2.nextPage());
 
   delay(2000);
+}
+
+void soundRecorderTask(void *parameter) {
+  for (;;) {
+    const unsigned long durationMs = 10000;
+    const unsigned long startMs = millis();
+    int highestLoudness = 0;
+
+    while (millis() - startMs < durationMs) {
+      long sum = 0;
+      for (int i = 0; i < 32; i++) {
+        sum += analogRead(soundSensorPinAdc);
+      }
+      sum >>= 5;
+
+      if (sum > highestLoudness) {
+        highestLoudness = sum;
+      }
+
+      vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+    Serial.print("Highest loudness in last 10s: ");
+    Serial.println(highestLoudness);
+  }
 }
 
 void testRelay() {
