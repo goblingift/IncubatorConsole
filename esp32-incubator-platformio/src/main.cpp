@@ -59,6 +59,7 @@ void setup() {
   Serial.begin(9600);
   delay(1000);
   Wire.begin();
+  Wire.setTimeOut(1000);
 
   if (!ina226.init()) {
     Serial.println("INA226 not found!");
@@ -281,7 +282,10 @@ void playSoundNotification() {
 
 void WTR_LVL_readBytes(byte addr, byte *buf, byte len) {
   Wire.requestFrom((int)addr, (int)len);
-  while (Wire.available() < len) {}
+  unsigned long t = millis();
+  while (Wire.available() < len) {
+    if (millis() - t > 500) break;
+  }
   for (byte i = 0; i < len; i++) {
     buf[i] = Wire.read();
   }
