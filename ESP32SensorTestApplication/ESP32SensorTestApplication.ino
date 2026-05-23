@@ -153,6 +153,10 @@ void loop() {
 
   measureAccelerometer();
 
+  Serial.print("Water level: ");
+  Serial.print(WTR_LVL_readPercent());
+  Serial.println("%");
+
   float weight = scale.get_units(10);
   Serial.print("Weight: ");
   Serial.print(weight, 1);
@@ -217,6 +221,7 @@ void measureAccelerometer() {
   Serial.print(roll, 2);
   Serial.println(" deg");
 }
+
 
 void printMeasurement(uint16_t co2, float temp, float rh) {
   Serial.print("CO2 concentration [ppm]: ");
