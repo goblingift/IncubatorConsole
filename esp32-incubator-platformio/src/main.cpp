@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include <Wire.h>
 #include <INA226_WE.h>
 #include <Digital_Light_TSL2561.h>
@@ -11,29 +12,15 @@
 #include <ADXL345.h>
 #include <math.h>
 
-U8G2_SH1107_SEEED_128X128_F_HW_I2C u8g2(U8G2_R0, /* reset=*/U8X8_PIN_NONE);
-
-INA226_WE ina226 = INA226_WE(0x40);  // Default I2C addr
+U8G2_SH1107_SEEED_128X128_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
+INA226_WE ina226(0x40);
 HX711 scale;
 Multi_Channel_Relay relay;
 ADXL345 adxl;
-
-const byte BUZZER_PIN = D7;
-const byte HUMID_PIN = A9;
-const int buttonPin = D2;
-const int DT_PIN = 3;   // HX711 to ESP32S3 GPIO3/D2/A2
-const int SCK_PIN = 2;  // HX711 to ESP32S3 GPIO2/D1/A1
-const float HX711_CALIBRATION_FACTOR = 112.0392;
-
-#define DS18B20_PIN 1
-#define WTR_LVL_THRESHOLD 100
-#define WTR_LVL_HIGH_ADDR 0x78
-#define WTR_LVL_LOW_ADDR  0x77
-
-OneWire oneWire(DS18B20_PIN);
+SensirionI2cScd4x sensor;
+OneWire oneWire(1);
 DallasTemperature sensors(&oneWire);
 
-SensirionI2cScd4x sensor;
 static int16_t error;
 static char errorMessage[64];
 int lastState = HIGH;
@@ -45,65 +32,78 @@ byte WTR_LVL_highData[12];
 #endif
 #define NO_ERROR 0
 
+const byte BUZZER_PIN = D7;
+const byte HUMID_PIN = A9;
+const int buttonPin = D2;
+const int DT_PIN = 3;
+const int SCK_PIN = 2;
+const float HX711_CALIBRATION_FACTOR = 112.0392;
+
+#define DS18B20_PIN 1
+#define WTR_LVL_THRESHOLD 100
+#define WTR_LVL_HIGH_ADDR 0x78
+#define WTR_LVL_LOW_ADDR 0x77
+
+void initializeSCD41();
+void printMeasurement(uint16_t co2, float temp, float rh);
+void measureDS18B20();
+void measureAccelerometer();
+void testRelay();
+bool isButtonPressed();
+void playSoundNotification();
+void WTR_LVL_readBytes(byte addr, byte *buf, byte len);
+int WTR_LVL_readPercent();
+int WTR_LVL_readPercentStable(uint8_t samples = 15, uint16_t delayMs = 120);
+
 void setup() {
   Serial.begin(9600);
+  delay(1000);
   Wire.begin();
 
-  // Initialize INA226- current/voltage sensor
   if (!ina226.init()) {
     Serial.println("INA226 not found!");
   }
-  ina226.setAverage(INA226_AVERAGE_16);             // Smooth
-  ina226.setConversionTime(INA226_CONV_TIME_1100);  // µs
-  ina226.setMeasureMode(INA226_CONTINUOUS);         // Or TRIGGERED
-  ina226.waitUntilConversionCompleted();            // Initial
+  ina226.setAverage(INA226_AVERAGE_16);
+  ina226.setConversionTime(INA226_CONV_TIME_1100);
+  ina226.setMeasureMode(INA226_CONTINUOUS);
+  ina226.waitUntilConversionCompleted();
 
-  // Initialize light sensor
   TSL2561.init();
 
-  // Initialize SCD41- CO2, Temp., Humid. sensor
   initializeSCD41();
   Serial.println("CO2, Temp, Humidity Sensor starts work!");
 
-  // Initialize buzzer
   pinMode(BUZZER_PIN, OUTPUT);
   playSoundNotification();
 
-  // Initialize water level sensor
+  delay(2500);
   Serial.print("Water level: ");
-  Serial.print(WTR_LVL_readPercent());
+  Serial.print(WTR_LVL_readPercentStable(20, 150));
   Serial.println("%");
 
-  // Initialize input button
   pinMode(buttonPin, INPUT);
   Serial.println("Input button initialized");
 
-  // Initialize DS18B20
   sensors.begin();
   Serial.println("DS18B20 initialized");
 
-  // Initialize ADXL345- Accelerometer
   adxl.powerOn();
   Serial.println("ADXL345 Accelerometer initialized");
 
-  // Initialize scale
   scale.begin(DT_PIN, SCK_PIN);
   scale.set_scale(HX711_CALIBRATION_FACTOR);
   scale.tare(50);
   Serial.println("Initialized HX711 scale");
 
-  // Initialize relay
   relay.begin(0x11);
   testRelay();
 
-  // Initialize humidifier
   Serial.println("Test Humidifier for 2secs");
   pinMode(HUMID_PIN, OUTPUT);
   digitalWrite(HUMID_PIN, HIGH);
   delay(2000);
   digitalWrite(HUMID_PIN, LOW);
 
-  // Initialize OLED screen
   u8g2.begin();
   u8g2.firstPage();
   do {
@@ -116,7 +116,6 @@ void setup() {
 }
 
 void loop() {
-
   if (isButtonPressed()) {
     Serial.println("Button pressed!");
     playSoundNotification();
@@ -126,8 +125,8 @@ void loop() {
   float temp = 0.0;
   float rh = 0.0;
 
-  float vBus = ina226.getBusVoltage_V();      // V
-  float current_mA = ina226.getCurrent_mA();  // Convert to A: /1000.0
+  float vBus = ina226.getBusVoltage_V();
+  float current_mA = ina226.getCurrent_mA();
   Serial.print("Voltage: ");
   Serial.print(vBus);
   Serial.println(" V");
@@ -141,19 +140,17 @@ void loop() {
   error = sensor.measureAndReadSingleShot(co2, temp, rh);
   if (error != NO_ERROR) {
     Serial.print("Error trying to execute measureAndReadSingleShot(): ");
-    errorToString(error, errorMessage, sizeof errorMessage);
+    errorToString(error, errorMessage, sizeof(errorMessage));
     Serial.println(errorMessage);
-    return;
   } else {
     printMeasurement(co2, temp, rh);
   }
 
   measureDS18B20();
-
   measureAccelerometer();
 
   Serial.print("Water level: ");
-  Serial.print(WTR_LVL_readPercent());
+  Serial.print(WTR_LVL_readPercentStable(9, 100));
   Serial.println("%");
 
   float weight = scale.get_units(10);
@@ -166,10 +163,11 @@ void loop() {
     u8g2.setFont(u8g2_font_ncenB10_tr);
     u8g2.drawStr(0, 24, "Incubator running!");
   } while (u8g2.nextPage());
+
+  delay(2000);
 }
 
 void testRelay() {
-  /* Begin Controlling Relay */
   DEBUG_PRINT.println("Channel 1 on");
   relay.turn_on_channel(1);
   delay(500);
@@ -216,26 +214,21 @@ void measureAccelerometer() {
   Serial.print(pitch, 2);
   Serial.println(" deg");
 
-  Serial.print("Roll  = ");
+  Serial.print("Roll = ");
   Serial.print(roll, 2);
   Serial.println(" deg");
 }
 
-
 void printMeasurement(uint16_t co2, float temp, float rh) {
   Serial.print("CO2 concentration [ppm]: ");
-  Serial.print(co2);
-  Serial.println();
+  Serial.println(co2);
   Serial.print("Temperature [°C]: ");
-  Serial.print(temp);
-  Serial.println();
+  Serial.println(temp);
   Serial.print("Relative Humidity [RH]: ");
-  Serial.print(rh);
-  Serial.println();
+  Serial.println(rh);
 }
 
 void initializeSCD41() {
-  Wire.begin();
   sensor.begin(Wire, SCD41_I2C_ADDR_62);
   uint64_t serialNumber = 0;
   delay(30);
@@ -243,31 +236,30 @@ void initializeSCD41() {
   error = sensor.wakeUp();
   if (error != NO_ERROR) {
     Serial.print("Error trying to execute wakeUp(): ");
-    errorToString(error, errorMessage, sizeof errorMessage);
+    errorToString(error, errorMessage, sizeof(errorMessage));
     Serial.println(errorMessage);
   }
   error = sensor.stopPeriodicMeasurement();
   if (error != NO_ERROR) {
     Serial.print("Error trying to execute stopPeriodicMeasurement(): ");
-    errorToString(error, errorMessage, sizeof errorMessage);
+    errorToString(error, errorMessage, sizeof(errorMessage));
     Serial.println(errorMessage);
   }
   error = sensor.reinit();
   if (error != NO_ERROR) {
     Serial.print("Error trying to execute reinit(): ");
-    errorToString(error, errorMessage, sizeof errorMessage);
+    errorToString(error, errorMessage, sizeof(errorMessage));
     Serial.println(errorMessage);
   }
-  // Read out information about the sensor
   error = sensor.getSerialNumber(serialNumber);
   if (error != NO_ERROR) {
     Serial.print("Error trying to execute getSerialNumber(): ");
-    errorToString(error, errorMessage, sizeof errorMessage);
+    errorToString(error, errorMessage, sizeof(errorMessage));
     Serial.println(errorMessage);
     return;
   }
   Serial.print("serial number: 0x");
-  Serial.println(serialNumber);
+  Serial.println((unsigned long)(serialNumber & 0xFFFFFFFF));
 }
 
 bool isButtonPressed() {
@@ -278,19 +270,21 @@ bool isButtonPressed() {
 }
 
 void playSoundNotification() {
-  tone(BUZZER_PIN, 400);   // low tone
+  tone(BUZZER_PIN, 400);
   delay(40);
   noTone(BUZZER_PIN);
   delay(60);
-  tone(BUZZER_PIN, 1200);  // high tone
+  tone(BUZZER_PIN, 1200);
   delay(40);
   noTone(BUZZER_PIN);
 }
 
 void WTR_LVL_readBytes(byte addr, byte *buf, byte len) {
-  Wire.requestFrom(addr, len);
-  while (Wire.available() < len);
-  for (byte i = 0; i < len; i++) buf[i] = Wire.read();
+  Wire.requestFrom((int)addr, (int)len);
+  while (Wire.available() < len) {}
+  for (byte i = 0; i < len; i++) {
+    buf[i] = Wire.read();
+  }
 }
 
 int WTR_LVL_readPercent() {
@@ -302,7 +296,6 @@ int WTR_LVL_readPercent() {
   for (byte i = 0; i < 8; i++) {
     if (WTR_LVL_lowData[i] > WTR_LVL_THRESHOLD) WTR_LVL_mask |= (1UL << i);
   }
-
   for (byte i = 0; i < 12; i++) {
     if (WTR_LVL_highData[i] > WTR_LVL_THRESHOLD) WTR_LVL_mask |= (1UL << (8 + i));
   }
@@ -314,4 +307,27 @@ int WTR_LVL_readPercent() {
   }
 
   return WTR_LVL_sections * 5;
+}
+
+int WTR_LVL_readPercentStable(uint8_t samples, uint16_t delayMs) {
+  uint8_t histogram[21] = {0};
+
+  for (uint8_t i = 0; i < samples; i++) {
+    int pct = WTR_LVL_readPercent();
+    if (pct >= 0 && pct <= 100 && pct % 5 == 0) {
+      histogram[pct / 5]++;
+    }
+    delay(delayMs);
+  }
+
+  uint8_t bestIndex = 0;
+  uint8_t bestCount = 0;
+  for (uint8_t i = 0; i <= 20; i++) {
+    if (histogram[i] > bestCount) {
+      bestCount = histogram[i];
+      bestIndex = i;
+    }
+  }
+
+  return bestIndex * 5;
 }

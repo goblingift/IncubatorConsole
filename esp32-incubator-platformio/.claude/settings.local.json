@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pio run *)",
+      "PowerShell(\\(Get-Command pio -ErrorAction SilentlyContinue\\).Source; $env:PATH -split ';' | Select-String -Pattern \"platformio|pio|python\" -CaseSensitive:$false)",
+      "PowerShell(Get-ChildItem \"$env:USERPROFILE\\\\.platformio\" -ErrorAction SilentlyContinue | Select-Object Name; Get-ChildItem \"$env:LOCALAPPDATA\\\\Programs\\\\Python\" -ErrorAction SilentlyContinue | Select-Object Name)",
+      "Bash(\"/c/Users/andre/.platformio/penv/Scripts/pio\" run *)",
+      "Bash(\"/c/Users/andre/.platformio/penv/Scripts/pip\" install *)",
+      "PowerShell($port = [System.IO.Ports.SerialPort]::new\\(\"COM6\"\\); try { $port.Open\\(\\); Write-Host \"COM6 is free\"; $port.Close\\(\\) } catch { Write-Host \"COM6 is busy: $_\" })"
+    ]
+  }
+}
