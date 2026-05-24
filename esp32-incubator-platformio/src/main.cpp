@@ -38,6 +38,8 @@ const int soundSensorPinAdc = A8;
 TaskHandle_t soundTaskHandle = NULL;
 TaskHandle_t sensorTaskHandle = NULL;
 
+volatile int g_highestLoudness = 0;
+
 #define WTR_LVL_THRESHOLD 100
 #define WTR_LVL_HIGH_ADDR 0x78
 #define WTR_LVL_LOW_ADDR 0x77
@@ -61,6 +63,7 @@ void setup() {
   if (!ina226.init()) {
     Serial.println("INA226 not found!");
   }
+  ina226.setResistorRange(10, 8.0);  // R010 shunt = 10 mΩ, max ~8 A
   ina226.setAverage(INA226_AVERAGE_16);
   ina226.setConversionTime(INA226_CONV_TIME_1100);
   ina226.setMeasureMode(INA226_CONTINUOUS);
@@ -139,7 +142,7 @@ void loop() {
 }
 
 void sensorReadingTask(void *parameter) {
-  const unsigned long intervalMs = 15000;
+  const unsigned long intervalMs = 10000;
   for (;;) {
     unsigned long cycleStart = millis();
     // --- collect all values first ---
@@ -180,12 +183,26 @@ void sensorReadingTask(void *parameter) {
     Serial.print("Roll:         "); Serial.print(roll, 2);           Serial.println(" deg");
     Serial.print("Water level:  "); Serial.print(waterLevel);        Serial.println(" %");
     Serial.print("Weight:       "); Serial.print(weight, 1);         Serial.println(" g");
+    Serial.print("Peak loudness:"); Serial.print(g_highestLoudness); Serial.println(" (last 10s)");
     Serial.println("----------------------");
 
+    char tBuf[20], hBuf[20], co2Buf[20];
+    if (scdError == NO_ERROR) {
+      snprintf(tBuf,   sizeof(tBuf),   "T:   %.1f C", co2Temp);
+      snprintf(hBuf,   sizeof(hBuf),   "H:   %.0f %%", rh);
+      snprintf(co2Buf, sizeof(co2Buf), "CO2: %u ppm", co2);
+    } else {
+      strncpy(tBuf,   "T:   ---", sizeof(tBuf));
+      strncpy(hBuf,   "H:   ---", sizeof(hBuf));
+      strncpy(co2Buf, "CO2: ---", sizeof(co2Buf));
+    }
     u8g2.firstPage();
     do {
       u8g2.setFont(u8g2_font_ncenB10_tr);
-      u8g2.drawStr(0, 24, "Incubator running!");
+      u8g2.drawStr(0, 20,  tBuf);
+      u8g2.drawStr(0, 48,  hBuf);
+      u8g2.drawStr(0, 76,  co2Buf);
+      u8g2.drawStr(0, 112, "Incubator OK");
     } while (u8g2.nextPage());
 
     unsigned long elapsed = millis() - cycleStart;
@@ -215,25 +232,24 @@ void soundRecorderTask(void *parameter) {
       vTaskDelay(pdMS_TO_TICKS(10));
     }
 
-    Serial.print("Highest loudness in last 10s: ");
-    Serial.println(highestLoudness);
+    g_highestLoudness = highestLoudness;
   }
 }
 
 void testRelay() {
-  DEBUG_PRINT.println("Channel 1 on");
+  DEBUG_PRINT.println("Channel 1 (12V fan) on");
   relay.turn_on_channel(1);
   delay(500);
-  DEBUG_PRINT.println("Channel 2 on");
   relay.turn_off_channel(1);
+  DEBUG_PRINT.println("Channel 2 (12V led) on");
   relay.turn_on_channel(2);
   delay(500);
-  DEBUG_PRINT.println("Channel 3 on");
   relay.turn_off_channel(2);
+  DEBUG_PRINT.println("Channel 3 (12V heater) on");
   relay.turn_on_channel(3);
   delay(500);
-  DEBUG_PRINT.println("Channel 4 on");
   relay.turn_off_channel(3);
+  DEBUG_PRINT.println("Channel 4 (unused) on");
   relay.turn_on_channel(4);
   delay(500);
   relay.turn_off_channel(4);
