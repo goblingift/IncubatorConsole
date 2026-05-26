@@ -46,6 +46,7 @@ volatile uint8_t g_relayState = 0;  // bitmask: bit0=relay1, bit1=relay2, bit2=r
 #define WTR_LVL_LOW_ADDR 0x77
 
 void initializeSCD41();
+uint32_t readTimestamp();
 void relayOn(int ch);
 void relayOff(int ch);
 void testRelay();
@@ -167,11 +168,13 @@ void sensorReadingTask(void *parameter) {
     float pitch = atan2((float)xyz[0], sqrt((float)(xyz[1]*xyz[1] + xyz[2]*xyz[2]))) * 180.0f / PI;
     float roll  = atan2((float)xyz[1], sqrt((float)(xyz[0]*xyz[0] + xyz[2]*xyz[2]))) * 180.0f / PI;
 
-    int   waterLevel = WTR_LVL_readPercentStable(9, 100);
-    float weight     = scale.get_units(10);
+    int      waterLevel = WTR_LVL_readPercentStable(9, 100);
+    float    weight     = scale.get_units(10);
+    uint32_t ts         = readTimestamp();
 
     // --- print everything as one block ---
     Serial.println("\n--- Sensor Reading ---");
+    Serial.print("Timestamp:    "); Serial.println(ts);
     Serial.print("Voltage:      "); Serial.print(vBus);              Serial.println(" V");
     Serial.print("Current:      "); Serial.print(current_mA / 1000.0); Serial.println(" A");
     Serial.print("Light:        "); Serial.print(lux);               Serial.println(" lux");
@@ -265,6 +268,14 @@ void testRelay() {
   relayOff(4);
 }
 
+
+// MOCK — replace body with: return rtc.now().unixtime();
+// Once DS1307 is wired and RTClib is added to lib_deps, that single line
+// returns the same uint32_t Unix timestamp format this function produces.
+uint32_t readTimestamp() {
+  const uint32_t BASE_TS = 1779796800UL;  // 2026-05-26 12:00:00 UTC
+  return BASE_TS + (millis() / 1000UL);
+}
 
 void initializeSCD41() {
   sensor.begin(Wire, SCD41_I2C_ADDR_62);
