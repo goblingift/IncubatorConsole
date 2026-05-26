@@ -9,6 +9,9 @@
 #include "HX711.h"
 #include <ADXL345.h>
 #include <math.h>
+#include "SensorReading.h"
+#include "LoRaPayload.h"
+#include "AesGcm.h"
 
 U8G2_SH1107_SEEED_128X128_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 INA226_WE ina226(0x40);
@@ -26,6 +29,21 @@ byte WTR_LVL_highData[12];
 #undef NO_ERROR
 #endif
 #define NO_ERROR 0
+
+const uint8_t DEVICE_ID = 1;
+
+// AES-128-GCM pre-shared key — PLACEHOLDER, replace before deployment.
+// Must be identical on the receiver ESP32.
+static const uint8_t AES_KEY[AesGcm::KEY_SIZE] = {
+    0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+    0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10
+};
+
+static LoRaPayload* loraPayload = nullptr;
+static AesGcm*      aesGcm     = nullptr;
+// Kept as a global so it never lives on the task stack (190 bytes + mbedTLS internals
+// would otherwise push sensorReadingTask past its stack limit).
+static uint8_t encryptedBuf[LoRaPayload::SIZE + AesGcm::OVERHEAD];
 
 const byte BUZZER_PIN = D7;
 const byte HUMID_PIN = A9;
@@ -46,6 +64,7 @@ volatile uint8_t g_relayState = 0;  // bitmask: bit0=relay1, bit1=relay2, bit2=r
 #define WTR_LVL_LOW_ADDR 0x77
 
 void initializeSCD41();
+uint32_t readTimestamp();
 void relayOn(int ch);
 void relayOff(int ch);
 void testRelay();
@@ -62,6 +81,9 @@ void setup() {
   delay(1000);
   Wire.begin();
   Wire.setTimeOut(1000);
+
+  loraPayload = new LoRaPayload();
+  aesGcm      = new AesGcm(AES_KEY);
 
   if (!ina226.init()) {
     Serial.println("INA226 not found!");
@@ -126,7 +148,7 @@ void setup() {
   xTaskCreatePinnedToCore(
     sensorReadingTask,
     "SensorReading",
-    8192,
+    20480,
     NULL,
     1,
     &sensorTaskHandle,
@@ -167,11 +189,14 @@ void sensorReadingTask(void *parameter) {
     float pitch = atan2((float)xyz[0], sqrt((float)(xyz[1]*xyz[1] + xyz[2]*xyz[2]))) * 180.0f / PI;
     float roll  = atan2((float)xyz[1], sqrt((float)(xyz[0]*xyz[0] + xyz[2]*xyz[2]))) * 180.0f / PI;
 
-    int   waterLevel = WTR_LVL_readPercentStable(9, 100);
-    float weight     = scale.get_units(10);
+    int      waterLevel = WTR_LVL_readPercentStable(9, 100);
+    float    weight     = scale.get_units(10);
+    uint32_t ts         = readTimestamp();
 
     // --- print everything as one block ---
     Serial.println("\n--- Sensor Reading ---");
+    Serial.print("Device ID:    "); Serial.println(DEVICE_ID);
+    Serial.print("Timestamp:    "); Serial.println(ts);
     Serial.print("Voltage:      "); Serial.print(vBus);              Serial.println(" V");
     Serial.print("Current:      "); Serial.print(current_mA / 1000.0); Serial.println(" A");
     Serial.print("Light:        "); Serial.print(lux);               Serial.println(" lux");
@@ -192,6 +217,42 @@ void sensorReadingTask(void *parameter) {
     relayStr[4] = '\0';
     Serial.print("Relay state:  "); Serial.println(relayStr);
     Serial.println("----------------------");
+
+    // --- build binary reading and add to LoRa payload ---
+    SensorReading reading;
+    reading.ts           = ts;
+    reading.deviceId     = DEVICE_ID;
+    reading.voltage      = (uint16_t)(vBus * 100.0f);
+    reading.current      = (int16_t)(current_mA / 10.0f);
+    reading.lux          = (uint16_t)constrain(lux, 0L, 65535L);
+    reading.co2          = co2;
+    reading.temperature  = (int16_t)(co2Temp * 100.0f);
+    reading.humidity     = (uint16_t)(rh * 100.0f);
+    reading.pitch        = (int16_t)(pitch * 10.0f);
+    reading.roll         = (int16_t)(roll * 10.0f);
+    reading.waterLevel   = (uint8_t)waterLevel;
+    reading.weight       = (uint16_t)constrain((long)weight, 0L, 20000L);
+    reading.peakLoudness = (uint16_t)g_highestLoudness;
+    reading.relayState   = g_relayState;
+
+    loraPayload->addReading(reading);
+    Serial.print("Readings buffered: ");
+    Serial.print(loraPayload->count());
+    Serial.print("/");
+    Serial.println(LoRaPayload::READING_COUNT);
+
+    if (loraPayload->isReady()) {
+        size_t encLen = 0;
+        if (aesGcm->encrypt(loraPayload->data(), loraPayload->size(), encryptedBuf, encLen)) {
+            Serial.print("LoRa packet ready: ");
+            Serial.print(encLen);
+            Serial.println(" bytes encrypted — transmission pending");
+            // TODO: transmit encryptedBuf via LoRa (SX1262)
+        } else {
+            Serial.println("AES-GCM encryption failed");
+        }
+        loraPayload->reset();
+    }
 
     char tBuf[20], hBuf[20], co2Buf[20];
     if (scdError == NO_ERROR) {
@@ -265,6 +326,14 @@ void testRelay() {
   relayOff(4);
 }
 
+
+// MOCK — replace body with: return rtc.now().unixtime();
+// Once DS1307 is wired and RTClib is added to lib_deps, that single line
+// returns the same uint32_t Unix timestamp format this function produces.
+uint32_t readTimestamp() {
+  const uint32_t BASE_TS = 1779796800UL;  // 2026-05-26 12:00:00 UTC
+  return BASE_TS + (millis() / 1000UL);
+}
 
 void initializeSCD41() {
   sensor.begin(Wire, SCD41_I2C_ADDR_62);
