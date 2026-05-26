@@ -9,6 +9,9 @@
 #include "HX711.h"
 #include <ADXL345.h>
 #include <math.h>
+#include "SensorReading.h"
+#include "LoRaPayload.h"
+#include "AesGcm.h"
 
 U8G2_SH1107_SEEED_128X128_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 INA226_WE ina226(0x40);
@@ -28,6 +31,19 @@ byte WTR_LVL_highData[12];
 #define NO_ERROR 0
 
 const uint8_t DEVICE_ID = 1;
+
+// AES-128-GCM pre-shared key — PLACEHOLDER, replace before deployment.
+// Must be identical on the receiver ESP32.
+static const uint8_t AES_KEY[AesGcm::KEY_SIZE] = {
+    0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+    0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10
+};
+
+static LoRaPayload* loraPayload = nullptr;
+static AesGcm*      aesGcm     = nullptr;
+// Kept as a global so it never lives on the task stack (190 bytes + mbedTLS internals
+// would otherwise push sensorReadingTask past its stack limit).
+static uint8_t encryptedBuf[LoRaPayload::SIZE + AesGcm::OVERHEAD];
 
 const byte BUZZER_PIN = D7;
 const byte HUMID_PIN = A9;
@@ -65,6 +81,9 @@ void setup() {
   delay(1000);
   Wire.begin();
   Wire.setTimeOut(1000);
+
+  loraPayload = new LoRaPayload();
+  aesGcm      = new AesGcm(AES_KEY);
 
   if (!ina226.init()) {
     Serial.println("INA226 not found!");
@@ -129,7 +148,7 @@ void setup() {
   xTaskCreatePinnedToCore(
     sensorReadingTask,
     "SensorReading",
-    8192,
+    20480,
     NULL,
     1,
     &sensorTaskHandle,
@@ -198,6 +217,42 @@ void sensorReadingTask(void *parameter) {
     relayStr[4] = '\0';
     Serial.print("Relay state:  "); Serial.println(relayStr);
     Serial.println("----------------------");
+
+    // --- build binary reading and add to LoRa payload ---
+    SensorReading reading;
+    reading.ts           = ts;
+    reading.deviceId     = DEVICE_ID;
+    reading.voltage      = (uint16_t)(vBus * 100.0f);
+    reading.current      = (int16_t)(current_mA / 10.0f);
+    reading.lux          = (uint16_t)constrain(lux, 0L, 65535L);
+    reading.co2          = co2;
+    reading.temperature  = (int16_t)(co2Temp * 100.0f);
+    reading.humidity     = (uint16_t)(rh * 100.0f);
+    reading.pitch        = (int16_t)(pitch * 10.0f);
+    reading.roll         = (int16_t)(roll * 10.0f);
+    reading.waterLevel   = (uint8_t)waterLevel;
+    reading.weight       = (uint16_t)constrain((long)weight, 0L, 20000L);
+    reading.peakLoudness = (uint16_t)g_highestLoudness;
+    reading.relayState   = g_relayState;
+
+    loraPayload->addReading(reading);
+    Serial.print("Readings buffered: ");
+    Serial.print(loraPayload->count());
+    Serial.print("/");
+    Serial.println(LoRaPayload::READING_COUNT);
+
+    if (loraPayload->isReady()) {
+        size_t encLen = 0;
+        if (aesGcm->encrypt(loraPayload->data(), loraPayload->size(), encryptedBuf, encLen)) {
+            Serial.print("LoRa packet ready: ");
+            Serial.print(encLen);
+            Serial.println(" bytes encrypted — transmission pending");
+            // TODO: transmit encryptedBuf via LoRa (SX1262)
+        } else {
+            Serial.println("AES-GCM encryption failed");
+        }
+        loraPayload->reset();
+    }
 
     char tBuf[20], hBuf[20], co2Buf[20];
     if (scdError == NO_ERROR) {
