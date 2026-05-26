@@ -27,6 +27,8 @@ byte WTR_LVL_highData[12];
 #endif
 #define NO_ERROR 0
 
+const uint8_t DEVICE_ID = 1;
+
 const byte BUZZER_PIN = D7;
 const byte HUMID_PIN = A9;
 const int buttonPin = D0;
@@ -174,6 +176,7 @@ void sensorReadingTask(void *parameter) {
 
     // --- print everything as one block ---
     Serial.println("\n--- Sensor Reading ---");
+    Serial.print("Device ID:    "); Serial.println(DEVICE_ID);
     Serial.print("Timestamp:    "); Serial.println(ts);
     Serial.print("Voltage:      "); Serial.print(vBus);              Serial.println(" V");
     Serial.print("Current:      "); Serial.print(current_mA / 1000.0); Serial.println(" A");
