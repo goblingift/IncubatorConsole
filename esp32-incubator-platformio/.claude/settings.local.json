@@ -7,7 +7,12 @@
       "Bash(\"/c/Users/andre/.platformio/penv/Scripts/pio\" run *)",
       "Bash(\"/c/Users/andre/.platformio/penv/Scripts/pip\" install *)",
       "PowerShell($port = [System.IO.Ports.SerialPort]::new\\(\"COM6\"\\); try { $port.Open\\(\\); Write-Host \"COM6 is free\"; $port.Close\\(\\) } catch { Write-Host \"COM6 is busy: $_\" })",
-      "PowerShell(cd \"c:\\\\development\\\\git\\\\IncubatorConsole\\\\esp32-incubator-platformio\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run 2>&1)"
+      "PowerShell(cd \"c:\\\\development\\\\git\\\\IncubatorConsole\\\\esp32-incubator-platformio\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run 2>&1)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebSearch",
+      "WebFetch(domain:nvlpubs.nist.gov)",
+      "WebFetch(domain:www.rfc-editor.org)",
+      "WebFetch(domain:csrc.nist.gov)"
     ]
   }
 }

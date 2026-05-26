@@ -39,12 +39,15 @@ TaskHandle_t soundTaskHandle = NULL;
 TaskHandle_t sensorTaskHandle = NULL;
 
 volatile int g_highestLoudness = 0;
+volatile uint8_t g_relayState = 0;  // bitmask: bit0=relay1, bit1=relay2, bit2=relay3, bit3=relay4
 
 #define WTR_LVL_THRESHOLD 100
 #define WTR_LVL_HIGH_ADDR 0x78
 #define WTR_LVL_LOW_ADDR 0x77
 
 void initializeSCD41();
+void relayOn(int ch);
+void relayOff(int ch);
 void testRelay();
 bool isButtonPressed();
 void playSoundNotification();
@@ -184,6 +187,10 @@ void sensorReadingTask(void *parameter) {
     Serial.print("Water level:  "); Serial.print(waterLevel);        Serial.println(" %");
     Serial.print("Weight:       "); Serial.print(weight, 1);         Serial.println(" g");
     Serial.print("Peak loudness:"); Serial.print(g_highestLoudness); Serial.println(" (last 10s)");
+    char relayStr[5];
+    for (int i = 0; i < 4; i++) relayStr[i] = (g_relayState & (1 << i)) ? '1' : '0';
+    relayStr[4] = '\0';
+    Serial.print("Relay state:  "); Serial.println(relayStr);
     Serial.println("----------------------");
 
     char tBuf[20], hBuf[20], co2Buf[20];
@@ -236,23 +243,26 @@ void soundRecorderTask(void *parameter) {
   }
 }
 
+void relayOn(int ch)  { relay.turn_on_channel(ch);  g_relayState |=  (1 << (ch - 1)); }
+void relayOff(int ch) { relay.turn_off_channel(ch); g_relayState &= ~(1 << (ch - 1)); }
+
 void testRelay() {
   DEBUG_PRINT.println("Channel 1 (12V fan) on");
-  relay.turn_on_channel(1);
+  relayOn(1);
   delay(500);
-  relay.turn_off_channel(1);
+  relayOff(1);
   DEBUG_PRINT.println("Channel 2 (12V led) on");
-  relay.turn_on_channel(2);
+  relayOn(2);
   delay(500);
-  relay.turn_off_channel(2);
+  relayOff(2);
   DEBUG_PRINT.println("Channel 3 (12V heater) on");
-  relay.turn_on_channel(3);
+  relayOn(3);
   delay(500);
-  relay.turn_off_channel(3);
+  relayOff(3);
   DEBUG_PRINT.println("Channel 4 (unused) on");
-  relay.turn_on_channel(4);
+  relayOn(4);
   delay(500);
-  relay.turn_off_channel(4);
+  relayOff(4);
 }
 
 
