@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <Wire.h>
-#include <INA226_WE.h>
+#include <Adafruit_INA260.h>
 #include <Digital_Light_TSL2561.h>
 #include <SensirionI2cScd4x.h>
 #include <multi_channel_relay.h>
@@ -14,7 +14,7 @@
 #include "AesGcm.h"
 
 U8G2_SH1107_SEEED_128X128_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
-INA226_WE ina226(0x40);
+Adafruit_INA260 ina260;
 HX711 scale;
 Multi_Channel_Relay relay;
 ADXL345 adxl;
@@ -85,14 +85,9 @@ void setup() {
   loraPayload = new LoRaPayload();
   aesGcm      = new AesGcm(AES_KEY);
 
-  if (!ina226.init()) {
-    Serial.println("INA226 not found!");
+  if (!ina260.begin()) {
+    Serial.println("Could not find INA260 chip. Check wiring!");
   }
-  ina226.setResistorRange(0.010, 8.0);  // R010 shunt = 10 mΩ = 0.010 Ω, max ~8 A
-  ina226.setAverage(INA226_AVERAGE_16);
-  ina226.setConversionTime(INA226_CONV_TIME_1100);
-  ina226.setMeasureMode(INA226_CONTINUOUS);
-  ina226.waitUntilConversionCompleted();
 
   TSL2561.init();
 
@@ -171,8 +166,8 @@ void sensorReadingTask(void *parameter) {
   for (;;) {
     unsigned long cycleStart = millis();
     // --- collect all values first ---
-    float vBus        = ina226.getBusVoltage_V();
-    float current_mA  = ina226.getCurrent_mA();
+    float current_mA  = ina260.readCurrent();
+    float vBus        = ina260.readBusVoltage() / 1000.0f;
     long  lux         = TSL2561.readVisibleLux();
 
     uint16_t co2 = 0;
