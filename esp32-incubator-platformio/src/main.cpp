@@ -88,7 +88,7 @@ void setup() {
   if (!ina226.init()) {
     Serial.println("INA226 not found!");
   }
-  ina226.setResistorRange(10, 8.0);  // R010 shunt = 10 mΩ, max ~8 A
+  ina226.setResistorRange(0.010, 8.0);  // R010 shunt = 10 mΩ = 0.010 Ω, max ~8 A
   ina226.setAverage(INA226_AVERAGE_16);
   ina226.setConversionTime(INA226_CONV_TIME_1100);
   ina226.setMeasureMode(INA226_CONTINUOUS);
@@ -254,7 +254,9 @@ void sensorReadingTask(void *parameter) {
         loraPayload->reset();
     }
 
-    char tBuf[20], hBuf[20], co2Buf[20];
+    char tBuf[20], hBuf[20], co2Buf[20], vBuf[20], iBuf[20];
+    snprintf(vBuf, sizeof(vBuf), "V:   %.2f V",  vBus);
+    snprintf(iBuf, sizeof(iBuf), "I:   %.3f A",  current_mA / 1000.0f);
     if (scdError == NO_ERROR) {
       snprintf(tBuf,   sizeof(tBuf),   "T:   %.1f C", co2Temp);
       snprintf(hBuf,   sizeof(hBuf),   "H:   %.0f %%", rh);
@@ -267,10 +269,12 @@ void sensorReadingTask(void *parameter) {
     u8g2.firstPage();
     do {
       u8g2.setFont(u8g2_font_ncenB10_tr);
-      u8g2.drawStr(0, 20,  tBuf);
-      u8g2.drawStr(0, 48,  hBuf);
-      u8g2.drawStr(0, 76,  co2Buf);
-      u8g2.drawStr(0, 112, "Incubator OK");
+      u8g2.drawStr(0, 16,  vBuf);
+      u8g2.drawStr(0, 36,  iBuf);
+      u8g2.drawStr(0, 56,  tBuf);
+      u8g2.drawStr(0, 76,  hBuf);
+      u8g2.drawStr(0, 96,  co2Buf);
+      u8g2.drawStr(0, 116, "Incubator OK");
     } while (u8g2.nextPage());
 
     unsigned long elapsed = millis() - cycleStart;
