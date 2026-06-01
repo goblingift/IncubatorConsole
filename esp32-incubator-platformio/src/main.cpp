@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include "DS1307.h"
 #include <Adafruit_INA260.h>
 #include <Digital_Light_TSL2561.h>
 #include <SensirionI2cScd4x.h>
@@ -14,6 +15,7 @@
 #include "AesGcm.h"
 
 U8G2_SH1107_SEEED_128X128_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
+DS1307 rtc;
 Adafruit_INA260 ina260;
 HX711 scale;
 Multi_Channel_Relay relay;
@@ -58,6 +60,7 @@ TaskHandle_t sensorTaskHandle = NULL;
 
 volatile int g_highestLoudness = 0;
 volatile uint8_t g_relayState = 0;  // bitmask: bit0=relay1, bit1=relay2, bit2=relay3, bit3=relay4
+static bool g_rtcOk = false;
 
 #define WTR_LVL_THRESHOLD 100
 #define WTR_LVL_HIGH_ADDR 0x78
@@ -78,12 +81,26 @@ void sensorReadingTask(void *parameter);
 
 void setup() {
   Serial.begin(9600);
-  delay(1000);
+  delay(5000);
   Wire.begin();
   Wire.setTimeOut(1000);
 
   loraPayload = new LoRaPayload();
   aesGcm      = new AesGcm(AES_KEY);
+
+  rtc.begin();
+  Wire.beginTransmission(0x68);
+  g_rtcOk = (Wire.endTransmission() == 0);
+  if (!g_rtcOk) {
+    Serial.println("DS1307 RTC not found on I2C (0x68)! Check wiring.");
+  } else {
+    // To set the RTC time: uncomment the three lines below, flash once, then re-comment and reflash.
+    //rtc.fillByYMD(2026, 6, 1);
+    //rtc.fillByHMS(12, 8, 0);
+    //rtc.setTime();
+    rtc.getTime();
+    Serial.printf("DS1307 RTC OK — time: %02d:%02d:%02d\n", rtc.hour, rtc.minute, rtc.second);
+  }
 
   if (!ina260.begin()) {
     Serial.println("Could not find INA260 chip. Check wiring!");
@@ -249,7 +266,7 @@ void sensorReadingTask(void *parameter) {
         loraPayload->reset();
     }
 
-    char tBuf[20], hBuf[20], co2Buf[20], vBuf[20], iBuf[20];
+    char tBuf[20], hBuf[20], co2Buf[20], vBuf[20], iBuf[20], timeBuf[6];
     snprintf(vBuf, sizeof(vBuf), "V:   %.2f V",  vBus);
     snprintf(iBuf, sizeof(iBuf), "I:   %.3f A",  current_mA / 1000.0f);
     if (scdError == NO_ERROR) {
@@ -261,15 +278,18 @@ void sensorReadingTask(void *parameter) {
       strncpy(hBuf,   "H:   ---", sizeof(hBuf));
       strncpy(co2Buf, "CO2: ---", sizeof(co2Buf));
     }
+    snprintf(timeBuf, sizeof(timeBuf), "%02u:%02u", rtc.hour, rtc.minute);
+
     u8g2.firstPage();
     do {
       u8g2.setFont(u8g2_font_ncenB10_tr);
-      u8g2.drawStr(0, 16,  vBuf);
-      u8g2.drawStr(0, 36,  iBuf);
-      u8g2.drawStr(0, 56,  tBuf);
-      u8g2.drawStr(0, 76,  hBuf);
-      u8g2.drawStr(0, 96,  co2Buf);
-      u8g2.drawStr(0, 116, "Incubator OK");
+      u8g2.drawStr(128 - u8g2.getStrWidth(timeBuf), 12, timeBuf);
+      u8g2.drawStr(0, 28,  vBuf);
+      u8g2.drawStr(0, 46,  iBuf);
+      u8g2.drawStr(0, 64,  tBuf);
+      u8g2.drawStr(0, 82,  hBuf);
+      u8g2.drawStr(0, 100, co2Buf);
+      u8g2.drawStr(0, 118, "Incubator OK");
     } while (u8g2.nextPage());
 
     unsigned long elapsed = millis() - cycleStart;
@@ -326,12 +346,25 @@ void testRelay() {
 }
 
 
-// MOCK — replace body with: return rtc.now().unixtime();
-// Once DS1307 is wired and RTClib is added to lib_deps, that single line
-// returns the same uint32_t Unix timestamp format this function produces.
 uint32_t readTimestamp() {
-  const uint32_t BASE_TS = 1779796800UL;  // 2026-05-26 12:00:00 UTC
-  return BASE_TS + (millis() / 1000UL);
+  if (!g_rtcOk) return millis() / 1000UL;
+  rtc.getTime();
+  // Sanity-check: if any field is out of range the DS1307 returned garbage.
+  if (rtc.month  < 1 || rtc.month  > 12 ||
+      rtc.hour   > 23 || rtc.minute > 59 || rtc.second > 59) {
+    Serial.println("RTC returned invalid data — check wiring/power.");
+    return millis() / 1000UL;
+  }
+  uint16_t y = (uint16_t)rtc.year + 2000;
+  uint8_t  m = rtc.month;
+  uint8_t  d = rtc.dayOfMonth;
+  if (m < 3) { m += 12; y--; }
+  uint32_t days = 365UL * y + y/4 - y/100 + y/400
+                + (153 * m - 457) / 5 + d - 719469UL;
+  return days * 86400UL
+       + (uint32_t)rtc.hour   * 3600UL
+       + (uint32_t)rtc.minute * 60UL
+       + rtc.second;
 }
 
 void initializeSCD41() {

@@ -12,7 +12,13 @@
       "WebSearch",
       "WebFetch(domain:nvlpubs.nist.gov)",
       "WebFetch(domain:www.rfc-editor.org)",
-      "WebFetch(domain:csrc.nist.gov)"
+      "WebFetch(domain:csrc.nist.gov)",
+      "Bash(ls /Users/goblingift/GitHub/Grove_Sensor_Measurement_v1/)",
+      "Read(//Users/goblingift/GitHub/Grove_Sensor_Measurement_v1/**)",
+      "Bash(mkdir -p /Users/goblingift/GitHub/Grove_Sensor_Measurement_v1/SimpleRTC/src)"
+    ],
+    "additionalDirectories": [
+      "/Users/goblingift/GitHub/Grove_Sensor_Measurement_v1/SimpleRTC"
     ]
   }
 }
