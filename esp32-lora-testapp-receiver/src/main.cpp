@@ -1,8 +1,7 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <RadioLib.h>
-#include "SensorReading.h"
-#include "AesGcm.h"
+#include "ReceptionStats.h"
 
 // Wio SX1262 + XIAO ESP32S3 B2B connector pins
 static constexpr int LORA_NSS  = 41;
@@ -24,39 +23,33 @@ void blinkLed(int count, int onMs, int offMs) {
 }
 
 // --- LoRa parameters ---
-// Static
 static constexpr float LORA_FREQ_MHZ      = 868.0;
 static constexpr float LORA_BW_KHZ        = 125.0;
 static constexpr uint8_t LORA_CR          = 5;       // 4/5
 static constexpr uint8_t LORA_SYNC_WORD   = 0x14;    // private network
 static constexpr uint8_t LORA_PREAMBLE    = 8;
-// Configurable
 static constexpr uint8_t LORA_SF          = 7;
-static constexpr int8_t  LORA_TX_POWER    = 13;      // not used for RX, but kept for symmetry
+static constexpr int8_t  LORA_TX_POWER    = 13;
 
-// --- Encryption (must match sender) ---
-static const uint8_t AES_KEY[AesGcm::KEY_SIZE] = {
-    0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-    0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10
+// --- Expected encrypted payload ---
+static const uint8_t EXPECTED_PAYLOAD[] = {
+    0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC1, 0x4E, 0xA3, 0x45,
+    0x3B, 0x26, 0x80, 0x3D, 0x9A, 0xBF, 0xC5, 0xE6, 0xCB, 0x35, 0xAF, 0x87, 0x4C, 0xAF, 0x9D, 0x0C,
+    0x7F, 0x46, 0xC0, 0x2D, 0x2D, 0xD8, 0xEE, 0xBF, 0x43, 0x1A, 0x80, 0x6D, 0x6E, 0xDA, 0x74, 0x85,
+    0xD6, 0x72, 0x53, 0x6B, 0xA6, 0x05, 0xAB, 0xCB, 0xF3, 0x3F, 0xA2, 0x2D, 0x3F, 0x0A, 0x9C, 0x41,
+    0x60, 0x29, 0xA9, 0xF5, 0xD3, 0x9E, 0x0B, 0x66, 0x94, 0x4E, 0xAD, 0x39, 0xA0, 0x47, 0x16, 0x6F,
+    0x46, 0xEE, 0xBA, 0xA5, 0xA8, 0xC7, 0x4E, 0x35, 0x8F, 0xC0, 0xA6, 0xB9, 0x0C, 0x70, 0x4B, 0x38,
+    0x19, 0x82, 0x9A, 0x07, 0x01, 0xA5, 0xC2, 0xBC, 0xBC, 0xC3, 0x9C, 0x62, 0x5D, 0xD2, 0x36, 0xB4,
+    0xDD, 0x51, 0xD0, 0xB8, 0xB0, 0x65, 0x03, 0x21, 0x06, 0x56, 0x28, 0xB6, 0x1E, 0x41, 0xAA, 0x03,
+    0x85, 0xDF, 0x96, 0x4F, 0x45, 0x7A, 0x1B, 0x82, 0xFA, 0xC5, 0x55, 0x34, 0x3C, 0x61, 0x9F, 0x92,
+    0x10, 0x63, 0xC0, 0x8F, 0xE2, 0xC3, 0x97, 0xB3, 0x2E, 0xE5, 0x93, 0x42, 0x7F, 0x50, 0xE4, 0x8A,
+    0x6E, 0x17, 0x41, 0x13, 0x38, 0x0E, 0x47, 0xBC, 0x1F, 0xC4, 0x8A, 0x09, 0x3C, 0x63, 0x90, 0xB3,
+    0xC6, 0xAF, 0x10, 0x3F, 0xC7, 0x37, 0x26, 0xEA, 0xCC, 0x8F, 0x02, 0x3B, 0xB2, 0x30
 };
+static constexpr size_t EXPECTED_PAYLOAD_LEN = sizeof(EXPECTED_PAYLOAD);
 
-static AesGcm* aesGcm = nullptr;
-
-static constexpr uint8_t READING_COUNT = 6;
-static constexpr size_t  PAYLOAD_SIZE  = READING_COUNT * sizeof(SensorReading);  // 162 bytes
-static constexpr size_t  ENCRYPTED_LEN = PAYLOAD_SIZE + AesGcm::OVERHEAD;        // 190 bytes
-
-// --- Buffers ---
 static uint8_t rxBuf[256];
-static uint8_t decryptedBuf[PAYLOAD_SIZE];
-
-enum InputMode { MODE_LORA, MODE_SERIAL_HEX };
-static InputMode inputMode = MODE_LORA;
-
-void printReading(const SensorReading& r, uint8_t index);
-bool verifyReading(const SensorReading& r, uint8_t index);
-void processEncryptedPayload(const uint8_t* data, size_t len);
-bool parseHexString(const String& hex, uint8_t* out, size_t maxLen, size_t& outLen);
+static ReceptionStats stats;
 
 void setup() {
     Serial.begin(115200);
@@ -67,193 +60,92 @@ void setup() {
     Serial.println("=== LoRa Receiver / Test App ===");
     blinkLed(5, 150, 150);
 
-    aesGcm = new AesGcm(AES_KEY);
-
     Serial.print("[SX1262] Initializing ... ");
     int state = radio.begin(LORA_FREQ_MHZ, LORA_BW_KHZ, LORA_SF, LORA_CR,
                             LORA_SYNC_WORD, LORA_TX_POWER, LORA_PREAMBLE);
     if (state == RADIOLIB_ERR_NONE) {
         Serial.println("OK");
         radio.setCRC(true);
-        inputMode = MODE_LORA;
     } else {
         Serial.print("FAILED (code ");
         Serial.print(state);
-        Serial.println(") — falling back to Serial hex input mode");
-        inputMode = MODE_SERIAL_HEX;
+        Serial.println(")");
+        while (true) { blinkLed(1, 100, 0); delay(900); }
     }
 
-    if (inputMode == MODE_LORA) {
-        Serial.println("Listening for LoRa packets on 868 MHz ...");
-        Serial.println("(You can also paste a hex string into Serial at any time)");
-    } else {
-        Serial.println("Paste an encrypted hex string into Serial to decrypt and verify.");
-    }
+    Serial.print("Expected payload: ");
+    Serial.print(EXPECTED_PAYLOAD_LEN);
+    Serial.println(" bytes");
+    Serial.println("Listening for LoRa packets on 868 MHz ...");
 }
 
 void loop() {
-    // --- Check for LoRa packet ---
-    if (inputMode == MODE_LORA) {
-        int state = radio.receive(rxBuf, sizeof(rxBuf), 64000);
-        if (state == RADIOLIB_ERR_NONE) {
-            size_t len = radio.getPacketLength();
-            Serial.println();
-            Serial.print("[LoRa] Received ");
-            Serial.print(len);
-            Serial.print(" bytes  RSSI: ");
-            Serial.print(radio.getRSSI());
-            Serial.print(" dBm  SNR: ");
-            Serial.print(radio.getSNR());
-            Serial.println(" dB");
-            blinkLed(2, 80, 80);
-            processEncryptedPayload(rxBuf, len);
-        } else if (state != RADIOLIB_ERR_RX_TIMEOUT) {
-            Serial.print("[LoRa] Receive error: ");
-            Serial.println(state);
-        }
-    }
+    int state = radio.receive(rxBuf, sizeof(rxBuf), 64000);
 
-    // --- Check for Serial hex input ---
-    if (Serial.available()) {
-        String line = Serial.readStringUntil('\n');
-        line.trim();
-        if (line.length() > 0) {
-            size_t parsedLen = 0;
-            if (parseHexString(line, rxBuf, sizeof(rxBuf), parsedLen)) {
-                Serial.print("[Serial] Parsed ");
-                Serial.print(parsedLen);
-                Serial.println(" bytes from hex input");
-                processEncryptedPayload(rxBuf, parsedLen);
-            } else {
-                Serial.println("[Serial] Invalid hex string");
-            }
-        }
-    }
+    if (state == RADIOLIB_ERR_NONE) {
+        size_t len = radio.getPacketLength();
+        float rssi = radio.getRSSI();
+        float snr = radio.getSNR();
+        uint32_t timeOnAirMs = radio.getTimeOnAir(len) / 1000;
 
-}
+        Serial.println();
+        Serial.print("[LoRa] Received ");
+        Serial.print(len);
+        Serial.print(" bytes  ToA: ");
+        Serial.print(timeOnAirMs);
+        Serial.print(" ms  RSSI: ");
+        Serial.print(rssi);
+        Serial.print(" dBm  SNR: ");
+        Serial.print(snr);
+        Serial.println(" dB");
 
-void processEncryptedPayload(const uint8_t* data, size_t len) {
-    if (len != ENCRYPTED_LEN) {
-        Serial.print("  ERROR: expected ");
-        Serial.print(ENCRYPTED_LEN);
-        Serial.print(" bytes, got ");
-        Serial.println(len);
-        return;
-    }
-
-    size_t decLen = 0;
-    if (!aesGcm->decrypt(data, len, decryptedBuf, decLen)) {
-        Serial.println("  ERROR: AES-GCM decryption failed (wrong key or corrupted data)");
-        return;
-    }
-
-    Serial.print("  Decrypted OK: ");
-    Serial.print(decLen);
-    Serial.println(" bytes");
-
-    if (decLen != READING_COUNT * sizeof(SensorReading)) {
-        Serial.print("  ERROR: decrypted size mismatch (expected ");
-        Serial.print(READING_COUNT * sizeof(SensorReading));
-        Serial.println(" bytes)");
-        return;
-    }
-
-    const SensorReading* readings = reinterpret_cast<const SensorReading*>(decryptedBuf);
-    bool allOk = true;
-
-    Serial.println();
-    Serial.println("====== Decoded Sensor Readings ======");
-    for (uint8_t i = 0; i < READING_COUNT; i++) {
-        printReading(readings[i], i);
-        if (!verifyReading(readings[i], i)) {
-            allOk = false;
+        Serial.print("[LoRa] Raw bytes: ");
+        for (size_t i = 0; i < len; i++) {
+            if (rxBuf[i] < 0x10) Serial.print('0');
+            Serial.print(rxBuf[i], HEX);
         }
         Serial.println();
+
+        bool matched = (len == EXPECTED_PAYLOAD_LEN) &&
+                       (memcmp(rxBuf, EXPECTED_PAYLOAD, EXPECTED_PAYLOAD_LEN) == 0);
+
+        if (matched) {
+            Serial.println("[LoRa] MATCH — payload equals expected bytes");
+        } else {
+            Serial.println("[LoRa] MISMATCH — payload differs from expected bytes");
+            if (len == EXPECTED_PAYLOAD_LEN) {
+                for (size_t i = 0; i < len; i++) {
+                    if (rxBuf[i] != EXPECTED_PAYLOAD[i]) {
+                        Serial.print("  First diff at byte ");
+                        Serial.print(i);
+                        Serial.print(": got 0x");
+                        if (rxBuf[i] < 0x10) Serial.print('0');
+                        Serial.print(rxBuf[i], HEX);
+                        Serial.print(", expected 0x");
+                        if (EXPECTED_PAYLOAD[i] < 0x10) Serial.print('0');
+                        Serial.println(EXPECTED_PAYLOAD[i], HEX);
+                        break;
+                    }
+                }
+            } else {
+                Serial.print("  Length mismatch: got ");
+                Serial.print(len);
+                Serial.print(", expected ");
+                Serial.println(EXPECTED_PAYLOAD_LEN);
+            }
+        }
+
+        stats.recordReception(matched, rssi, snr, timeOnAirMs);
+
+        if (matched) {
+            blinkLed(2, 400, 200);
+        } else {
+            blinkLed(5, 80, 80);
+        }
+
+        stats.printSummary();
+    } else if (state != RADIOLIB_ERR_RX_TIMEOUT) {
+        Serial.print("[LoRa] Receive error: ");
+        Serial.println(state);
     }
-
-    if (allOk) {
-        Serial.println("RESULT: ALL READINGS OK");
-    } else {
-        Serial.println("RESULT: SOME READINGS OUT OF RANGE (see warnings above)");
-    }
-    Serial.println("=====================================");
-    Serial.println();
-}
-
-void printReading(const SensorReading& r, uint8_t index) {
-    Serial.print("--- Reading #");
-    Serial.print(index + 1);
-    Serial.println(" ---");
-    Serial.print("  Timestamp:    "); Serial.println(r.ts);
-    Serial.print("  Device ID:    "); Serial.println(r.deviceId);
-    Serial.print("  Voltage:      "); Serial.print(r.voltage / 100.0f, 2);   Serial.println(" V");
-    Serial.print("  Current:      "); Serial.print(r.current / 100.0f, 3);   Serial.println(" A");
-    Serial.print("  Light:        "); Serial.print(r.lux);                    Serial.println(" lux");
-    Serial.print("  CO2:          "); Serial.print(r.co2);                    Serial.println(" ppm");
-    Serial.print("  Temperature:  "); Serial.print(r.temperature / 100.0f, 2); Serial.println(" C");
-    Serial.print("  Humidity:     "); Serial.print(r.humidity / 100.0f, 1);   Serial.println(" %");
-    Serial.print("  Pitch:        "); Serial.print(r.pitch / 10.0f, 1);      Serial.println(" deg");
-    Serial.print("  Roll:         "); Serial.print(r.roll / 10.0f, 1);       Serial.println(" deg");
-    Serial.print("  Water level:  "); Serial.print(r.waterLevel);             Serial.println(" %");
-    Serial.print("  Weight:       "); Serial.print(r.weight);                 Serial.println(" g");
-    Serial.print("  Peak loudness:"); Serial.println(r.peakLoudness);
-    Serial.print("  Relay state:  ");
-    for (int i = 3; i >= 0; i--) Serial.print((r.relayState >> i) & 1);
-    Serial.println();
-}
-
-bool verifyReading(const SensorReading& r, uint8_t index) {
-    bool ok = true;
-    auto warn = [&](const char* field, const char* msg) {
-        Serial.print("  WARNING [#");
-        Serial.print(index + 1);
-        Serial.print("] ");
-        Serial.print(field);
-        Serial.print(": ");
-        Serial.println(msg);
-        ok = false;
-    };
-
-    if (r.ts == 0)
-        warn("Timestamp", "is zero");
-    if (r.voltage > 6000)
-        warn("Voltage", "> 60V — unlikely for 12V system");
-    if (r.current < -3000 || r.current > 3000)
-        warn("Current", "magnitude > 30A — out of INA260 range");
-    if (r.co2 > 5000)
-        warn("CO2", "> 5000 ppm — sensor max is 5000");
-    float tempC = r.temperature / 100.0f;
-    if (tempC < -40.0f || tempC > 85.0f)
-        warn("Temperature", "outside -40..85 C range");
-    if (r.humidity > 10000)
-        warn("Humidity", "> 100% — impossible");
-    if (r.waterLevel > 100)
-        warn("Water level", "> 100%");
-    if (r.weight > 20000)
-        warn("Weight", "> 20 kg — exceeds expected range");
-
-    return ok;
-}
-
-bool parseHexString(const String& hex, uint8_t* out, size_t maxLen, size_t& outLen) {
-    size_t hexLen = hex.length();
-    if (hexLen % 2 != 0) return false;
-
-    outLen = hexLen / 2;
-    if (outLen > maxLen) return false;
-
-    for (size_t i = 0; i < outLen; i++) {
-        char hi = hex.charAt(i * 2);
-        char lo = hex.charAt(i * 2 + 1);
-        auto nibble = [](char c) -> int {
-            if (c >= '0' && c <= '9') return c - '0';
-            if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-            if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-            return -1;
-        };
-        int h = nibble(hi), l = nibble(lo);
-        if (h < 0 || l < 0) return false;
-        out[i] = (h << 4) | l;
-    }
-    return true;
 }
