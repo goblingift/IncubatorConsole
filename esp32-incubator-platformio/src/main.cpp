@@ -69,12 +69,13 @@ static AesGcm*      aesGcm     = nullptr;
 static uint8_t encryptedBuf[LoRaPayload::SIZE + AesGcm::OVERHEAD];
 
 const byte BUZZER_PIN = D7;
-const byte HUMID_PIN = A9;
-const int buttonPin = D0;
+const byte HUMID_PIN = D7;
+// const int buttonPin = D0;  // DISABLED: reused for sound sensor
+const int soundSensorPinAdc = D0;
 const int DT_PIN = 3;
 const int SCK_PIN = 2;
 const float HX711_CALIBRATION_FACTOR = 112.0392;
-const int soundSensorPinAdc = A8;
+// const int soundSensorPinAdc = A8;  // DISABLED: conflicts with SPI SCK (GPIO 7)
 
 TaskHandle_t soundTaskHandle = NULL;
 TaskHandle_t sensorTaskHandle = NULL;
@@ -92,8 +93,8 @@ uint32_t readTimestamp();
 void relayOn(int ch);
 void relayOff(int ch);
 void testRelay();
-bool isButtonPressed();
-void playSoundNotification();
+// bool isButtonPressed();
+// void playSoundNotification();
 void WTR_LVL_readBytes(byte addr, byte *buf, byte len);
 int WTR_LVL_readPercent();
 int WTR_LVL_readPercentStable(uint8_t samples = 15, uint16_t delayMs = 120);
@@ -132,16 +133,17 @@ void setup() {
   initializeSCD41();
   Serial.println("CO2, Temp, Humidity Sensor starts work!");
 
-  pinMode(BUZZER_PIN, OUTPUT);
-  playSoundNotification();
+  // DISABLED: buzzer pin shared with humidifier
+  // pinMode(BUZZER_PIN, OUTPUT);
+  // playSoundNotification();
 
   delay(2500);
   Serial.print("Water level: ");
   Serial.print(WTR_LVL_readPercentStable(20, 150));
   Serial.println("%");
 
-  pinMode(buttonPin, INPUT_PULLUP);
-  Serial.println("Input button initialized");
+  // pinMode(buttonPin, INPUT_PULLUP);  // DISABLED: D0 reused for sound sensor
+  // Serial.println("Input button initialized");
 
   adxl.powerOn();
   Serial.println("ADXL345 Accelerometer initialized");
@@ -205,10 +207,7 @@ void setup() {
 }
 
 void loop() {
-  if (isButtonPressed()) {
-    Serial.println("Button pressed!");
-    playSoundNotification();
-  }
+  // Button disabled — D0 reused for sound sensor
   vTaskDelay(pdMS_TO_TICKS(50));
 }
 
@@ -455,40 +454,11 @@ void initializeSCD41() {
   Serial.println((unsigned long)(serialNumber & 0xFFFFFFFF));
 }
 
-bool isButtonPressed() {
-  static unsigned long pressStart = 0;
-  static bool alreadyFired = false;
-  static bool seenHighOnce = false;
+// DISABLED: button removed, D0 reused for sound sensor
+// bool isButtonPressed() { ... }
 
-  int state = digitalRead(buttonPin);
-
-  if (!seenHighOnce) {
-    if (state == HIGH) seenHighOnce = true;
-    return false;
-  }
-
-  if (state == LOW) {
-    if (pressStart == 0) pressStart = millis();
-    if (!alreadyFired && millis() - pressStart >= 1000) {
-      alreadyFired = true;
-      return true;
-    }
-  } else {
-    pressStart = 0;
-    alreadyFired = false;
-  }
-  return false;
-}
-
-void playSoundNotification() {
-  tone(BUZZER_PIN, 400);
-  delay(40);
-  noTone(BUZZER_PIN);
-  delay(60);
-  tone(BUZZER_PIN, 1200);
-  delay(40);
-  noTone(BUZZER_PIN);
-}
+// DISABLED: buzzer pin shared with humidifier
+// void playSoundNotification() { ... }
 
 void WTR_LVL_readBytes(byte addr, byte *buf, byte len) {
   Wire.requestFrom((int)addr, (int)len);
