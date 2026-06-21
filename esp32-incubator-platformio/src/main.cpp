@@ -7,6 +7,7 @@
 #include <multi_channel_relay.h>
 #include <U8g2lib.h>
 #include <SPI.h>
+#include <RadioLib.h>
 #include "HX711.h"
 #include <ADXL345.h>
 #include <math.h>
@@ -21,6 +22,26 @@ HX711 scale;
 Multi_Channel_Relay relay;
 ADXL345 adxl;
 SensirionI2cScd4x sensor;
+
+// --- SX1262 (Wio SX1262 + XIAO ESP32S3 B2B connector) ---
+static constexpr int LORA_NSS  = 41;
+static constexpr int LORA_DIO1 = 39;
+static constexpr int LORA_RST  = 42;
+static constexpr int LORA_BUSY = 40;
+
+SX1262 radio = new Module(LORA_NSS, LORA_DIO1, LORA_RST, LORA_BUSY);
+
+// Static
+static constexpr float   LORA_FREQ_MHZ    = 868.0;
+static constexpr float   LORA_BW_KHZ      = 125.0;
+static constexpr uint8_t LORA_CR          = 5;       // 4/5
+static constexpr uint8_t LORA_SYNC_WORD   = 0x14;    // private network
+static constexpr uint8_t LORA_PREAMBLE    = 8;
+// Configurable
+static constexpr uint8_t LORA_SF          = 7;
+static constexpr int8_t  LORA_TX_POWER    = 13;
+
+static bool g_loraOk = false;
 
 static int16_t error;
 static char errorMessage[64];
@@ -138,6 +159,19 @@ void setup() {
   digitalWrite(HUMID_PIN, HIGH);
   delay(2000);
   digitalWrite(HUMID_PIN, LOW);
+
+  Serial.print("[SX1262] Initializing ... ");
+  int loraState = radio.begin(LORA_FREQ_MHZ, LORA_BW_KHZ, LORA_SF, LORA_CR,
+                              LORA_SYNC_WORD, LORA_TX_POWER, LORA_PREAMBLE);
+  if (loraState == RADIOLIB_ERR_NONE) {
+    radio.setCRC(true);
+    g_loraOk = true;
+    Serial.println("OK");
+  } else {
+    Serial.print("FAILED (code ");
+    Serial.print(loraState);
+    Serial.println(")");
+  }
 
   u8g2.begin();
   u8g2.firstPage();
@@ -258,8 +292,7 @@ void sensorReadingTask(void *parameter) {
         if (aesGcm->encrypt(loraPayload->data(), loraPayload->size(), encryptedBuf, encLen)) {
             Serial.print("LoRa packet ready: ");
             Serial.print(encLen);
-            Serial.println(" bytes encrypted — transmission pending");
-            // TODO: transmit encryptedBuf via LoRa (SX1262)
+            Serial.println(" bytes encrypted");
 
             Serial.println("--- Encrypted payload (hex) ---");
             for (size_t i = 0; i < encLen; i++) {
@@ -268,6 +301,19 @@ void sensorReadingTask(void *parameter) {
             }
             Serial.println();
             Serial.println("-------------------------------");
+
+            if (g_loraOk) {
+                int txState = radio.transmit(encryptedBuf, encLen);
+                if (txState == RADIOLIB_ERR_NONE) {
+                    Serial.println("[SX1262] Transmitted OK");
+                } else {
+                    Serial.print("[SX1262] TX failed (code ");
+                    Serial.print(txState);
+                    Serial.println(")");
+                }
+            } else {
+                Serial.println("[SX1262] Radio not available — skipping TX");
+            }
         } else {
             Serial.println("AES-GCM encryption failed");
         }
