@@ -260,6 +260,14 @@ void sensorReadingTask(void *parameter) {
             Serial.print(encLen);
             Serial.println(" bytes encrypted — transmission pending");
             // TODO: transmit encryptedBuf via LoRa (SX1262)
+
+            Serial.println("--- Encrypted payload (hex) ---");
+            for (size_t i = 0; i < encLen; i++) {
+                if (encryptedBuf[i] < 0x10) Serial.print('0');
+                Serial.print(encryptedBuf[i], HEX);
+            }
+            Serial.println();
+            Serial.println("-------------------------------");
         } else {
             Serial.println("AES-GCM encryption failed");
         }
