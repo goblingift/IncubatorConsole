@@ -12,6 +12,17 @@ static constexpr int LORA_BUSY = 40;
 
 SX1262 radio = new Module(LORA_NSS, LORA_DIO1, LORA_RST, LORA_BUSY);
 
+static constexpr int LED_PIN = D0;
+
+void blinkLed(int count, int onMs, int offMs) {
+    for (int i = 0; i < count; i++) {
+        digitalWrite(LED_PIN, HIGH);
+        delay(onMs);
+        digitalWrite(LED_PIN, LOW);
+        if (i < count - 1) delay(offMs);
+    }
+}
+
 // --- LoRa parameters ---
 // Static
 static constexpr float LORA_FREQ_MHZ      = 868.0;
@@ -49,9 +60,12 @@ bool parseHexString(const String& hex, uint8_t* out, size_t maxLen, size_t& outL
 
 void setup() {
     Serial.begin(115200);
+    pinMode(LED_PIN, OUTPUT);
+    digitalWrite(LED_PIN, LOW);
     delay(3000);
 
     Serial.println("=== LoRa Receiver / Test App ===");
+    blinkLed(5, 150, 150);
 
     aesGcm = new AesGcm(AES_KEY);
 
@@ -91,6 +105,7 @@ void loop() {
             Serial.print(" dBm  SNR: ");
             Serial.print(radio.getSNR());
             Serial.println(" dB");
+            blinkLed(2, 80, 80);
             processEncryptedPayload(rxBuf, len);
         } else if (state != RADIOLIB_ERR_RX_TIMEOUT) {
             Serial.print("[LoRa] Receive error: ");
