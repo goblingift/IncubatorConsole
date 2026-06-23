@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include <SPI.h>
+#include <Wire.h>
 #include <RadioLib.h>
+#include <U8g2lib.h>
 #include "ReceptionStats.h"
 
 // Wio SX1262 + XIAO ESP32S3 B2B connector pins
@@ -10,6 +12,8 @@ static constexpr int LORA_RST  = 42;
 static constexpr int LORA_BUSY = 40;
 
 SX1262 radio = new Module(LORA_NSS, LORA_DIO1, LORA_RST, LORA_BUSY);
+
+U8G2_SH1107_SEEED_128X128_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 
 static constexpr int LED_PIN = D0;
 
@@ -48,8 +52,61 @@ static const uint8_t EXPECTED_PAYLOAD[] = {
 };
 static constexpr size_t EXPECTED_PAYLOAD_LEN = sizeof(EXPECTED_PAYLOAD);
 
+static constexpr uint32_t EXPECTED_PACKET_COUNT = 100;
+
 static uint8_t rxBuf[256];
-static ReceptionStats stats;
+static ReceptionStats stats(EXPECTED_PACKET_COUNT);
+
+void updateDisplay() {
+    char buf[22];
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_6x12_tr);
+
+    // Line 1: Title + last result
+    if (stats.getTotalReceived() == 0) {
+        u8g2.drawStr(0, 12, "LoRa RX - Waiting...");
+    } else if (stats.wasLastMatched()) {
+        u8g2.drawStr(0, 12, "LoRa RX - MATCH");
+    } else {
+        u8g2.drawStr(0, 12, "LoRa RX - MISMATCH");
+    }
+
+    // Line 2: Rx count and PDR
+    snprintf(buf, sizeof(buf), "Rx:%lu/%lu PDR:%.1f%%",
+             stats.getTotalReceived(), stats.getExpectedPacketCount(), stats.getPdr());
+    u8g2.drawStr(0, 26, buf);
+
+    // Line 3: Match / Mismatch counts
+    snprintf(buf, sizeof(buf), "OK:%lu FAIL:%lu",
+             stats.getMatchCount(), stats.getMismatchCount());
+    u8g2.drawStr(0, 40, buf);
+
+    // Line 4: Success rate
+    snprintf(buf, sizeof(buf), "Match rate: %.1f%%", stats.getSuccessRate());
+    u8g2.drawStr(0, 54, buf);
+
+    if (stats.getTotalReceived() > 0) {
+        // Line 5: Last RSSI
+        snprintf(buf, sizeof(buf), "RSSI: %.1f dBm", stats.getLastRssi());
+        u8g2.drawStr(0, 68, buf);
+
+        // Line 6: RSSI avg/min/max
+        snprintf(buf, sizeof(buf), " %.1f/%.1f/%.1f",
+                 stats.getAvgRssi(), stats.getMinRssi(), stats.getMaxRssi());
+        u8g2.drawStr(0, 80, buf);
+
+        // Line 7: Last SNR
+        snprintf(buf, sizeof(buf), "SNR: %.1f dB", stats.getLastSnr());
+        u8g2.drawStr(0, 94, buf);
+
+        // Line 8: SNR avg/min/max
+        snprintf(buf, sizeof(buf), " %.1f/%.1f/%.1f",
+                 stats.getAvgSnr(), stats.getMinSnr(), stats.getMaxSnr());
+        u8g2.drawStr(0, 106, buf);
+    }
+
+    u8g2.sendBuffer();
+}
 
 void setup() {
     Serial.begin(115200);
@@ -58,6 +115,14 @@ void setup() {
     delay(3000);
 
     Serial.println("=== LoRa Receiver / Test App ===");
+
+    u8g2.begin();
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_6x12_tr);
+    u8g2.drawStr(0, 24, "LoRa RX Test");
+    u8g2.drawStr(0, 48, "Initializing...");
+    u8g2.sendBuffer();
+
     blinkLed(5, 150, 150);
 
     Serial.print("[SX1262] Initializing ... ");
@@ -70,6 +135,9 @@ void setup() {
         Serial.print("FAILED (code ");
         Serial.print(state);
         Serial.println(")");
+        u8g2.clearBuffer();
+        u8g2.drawStr(0, 24, "LoRa INIT FAILED");
+        u8g2.sendBuffer();
         while (true) { blinkLed(1, 100, 0); delay(900); }
     }
 
@@ -77,6 +145,8 @@ void setup() {
     Serial.print(EXPECTED_PAYLOAD_LEN);
     Serial.println(" bytes");
     Serial.println("Listening for LoRa packets on 868 MHz ...");
+
+    updateDisplay();
 }
 
 void loop() {
@@ -135,7 +205,7 @@ void loop() {
             }
         }
 
-        stats.recordReception(matched, rssi, snr, timeOnAirMs);
+        stats.recordReception(matched, rssi, snr);
 
         if (matched) {
             blinkLed(2, 400, 200);
@@ -144,6 +214,7 @@ void loop() {
         }
 
         stats.printSummary();
+        updateDisplay();
     } else if (state != RADIOLIB_ERR_RX_TIMEOUT) {
         Serial.print("[LoRa] Receive error: ");
         Serial.println(state);

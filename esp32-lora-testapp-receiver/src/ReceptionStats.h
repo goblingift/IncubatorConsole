@@ -4,26 +4,55 @@
 
 class ReceptionStats {
 public:
-    void recordReception(bool matched, float rssi, float snr, uint32_t receiveMs) {
+    ReceptionStats(uint32_t expectedPackets) : expectedPacketCount(expectedPackets) {}
+
+    void recordReception(bool matched, float rssi, float snr) {
         totalReceived++;
         if (matched) matchCount++;
         else mismatchCount++;
         rssiValues.push_back(rssi);
         snrValues.push_back(snr);
-        receiveTimes.push_back(receiveMs);
+        lastRssi = rssi;
+        lastSnr = snr;
+        lastMatched = matched;
     }
 
     uint32_t getTotalReceived() const { return totalReceived; }
     uint32_t getMatchCount() const { return matchCount; }
     uint32_t getMismatchCount() const { return mismatchCount; }
-    const std::vector<float>& getRssiValues() const { return rssiValues; }
-    const std::vector<float>& getSnrValues() const { return snrValues; }
+    uint32_t getExpectedPacketCount() const { return expectedPacketCount; }
+    float getLastRssi() const { return lastRssi; }
+    float getLastSnr() const { return lastSnr; }
+    bool wasLastMatched() const { return lastMatched; }
+
+    float getPdr() const {
+        return totalReceived * 100.0f / expectedPacketCount;
+    }
+
+    float getSuccessRate() const {
+        if (totalReceived == 0) return 0;
+        return matchCount * 100.0f / totalReceived;
+    }
 
     float getAvgRssi() const {
         if (rssiValues.empty()) return 0;
         float sum = 0;
         for (float v : rssiValues) sum += v;
         return sum / rssiValues.size();
+    }
+
+    float getMinRssi() const {
+        if (rssiValues.empty()) return 0;
+        float m = rssiValues[0];
+        for (float v : rssiValues) if (v < m) m = v;
+        return m;
+    }
+
+    float getMaxRssi() const {
+        if (rssiValues.empty()) return 0;
+        float m = rssiValues[0];
+        for (float v : rssiValues) if (v > m) m = v;
+        return m;
     }
 
     float getAvgSnr() const {
@@ -47,41 +76,6 @@ public:
         return m;
     }
 
-    float getMinRssi() const {
-        if (rssiValues.empty()) return 0;
-        float m = rssiValues[0];
-        for (float v : rssiValues) if (v < m) m = v;
-        return m;
-    }
-
-    float getMaxRssi() const {
-        if (rssiValues.empty()) return 0;
-        float m = rssiValues[0];
-        for (float v : rssiValues) if (v > m) m = v;
-        return m;
-    }
-
-    float getAvgReceiveTime() const {
-        if (receiveTimes.empty()) return 0;
-        uint32_t sum = 0;
-        for (uint32_t v : receiveTimes) sum += v;
-        return (float)sum / receiveTimes.size();
-    }
-
-    uint32_t getMinReceiveTime() const {
-        if (receiveTimes.empty()) return 0;
-        uint32_t m = receiveTimes[0];
-        for (uint32_t v : receiveTimes) if (v < m) m = v;
-        return m;
-    }
-
-    uint32_t getMaxReceiveTime() const {
-        if (receiveTimes.empty()) return 0;
-        uint32_t m = receiveTimes[0];
-        for (uint32_t v : receiveTimes) if (v > m) m = v;
-        return m;
-    }
-
     void printSummary() const {
         Serial.println();
         Serial.println("====== Reception Statistics ======");
@@ -100,20 +94,26 @@ public:
             Serial.print(getAvgSnr(), 1); Serial.print(" / ");
             Serial.print(getMinSnr(), 1); Serial.print(" / ");
             Serial.print(getMaxSnr(), 1); Serial.println(" dB");
-            Serial.print("  Recv time avg/min/max: ");
-            Serial.print(getAvgReceiveTime(), 0); Serial.print(" / ");
-            Serial.print(getMinReceiveTime()); Serial.print(" / ");
-            Serial.print(getMaxReceiveTime()); Serial.println(" ms");
+            Serial.print("  PDR:             ");
+            Serial.print(totalReceived * 100.0f / expectedPacketCount, 1);
+            Serial.print(" % (");
+            Serial.print(totalReceived);
+            Serial.print("/");
+            Serial.print(expectedPacketCount);
+            Serial.println(")");
         }
         Serial.println("==================================");
         Serial.println();
     }
 
 private:
+    uint32_t expectedPacketCount;
     uint32_t totalReceived = 0;
     uint32_t matchCount = 0;
     uint32_t mismatchCount = 0;
+    float lastRssi = 0;
+    float lastSnr = 0;
+    bool lastMatched = false;
     std::vector<float> rssiValues;
     std::vector<float> snrValues;
-    std::vector<uint32_t> receiveTimes;
 };
