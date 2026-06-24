@@ -1,9 +1,9 @@
 #include <Arduino.h>
 #include <SPI.h>
-#include <Wire.h>
 #include <RadioLib.h>
 #include <U8g2lib.h>
 #include "ReceptionStats.h"
+#include "ReceptionLog.h"
 
 // Wio SX1262 + XIAO ESP32S3 B2B connector pins
 static constexpr int LORA_NSS  = 41;
@@ -56,53 +56,53 @@ static constexpr uint32_t EXPECTED_PACKET_COUNT = 100;
 
 static uint8_t rxBuf[256];
 static ReceptionStats stats(EXPECTED_PACKET_COUNT);
+static ReceptionLog receptionLog;
+
+enum AppMode { MODE_INIT, MODE_COMMAND, MODE_RECEIVE };
+static AppMode appMode = MODE_INIT;
+
+void handleSerialCommand();
 
 void updateDisplay() {
     char buf[22];
     u8g2.clearBuffer();
+
+    // Test name — big font
+    char testName[16];
+    snprintf(testName, sizeof(testName), "test_%d", receptionLog.getTestNumber());
+    u8g2.setFont(u8g2_font_ncenB14_tr);
+    u8g2.drawStr(0, 18, testName);
+
+    // Stats — small font
     u8g2.setFont(u8g2_font_6x12_tr);
 
-    // Line 1: Title + last result
     if (stats.getTotalReceived() == 0) {
-        u8g2.drawStr(0, 12, "LoRa RX - Waiting...");
-    } else if (stats.wasLastMatched()) {
-        u8g2.drawStr(0, 12, "LoRa RX - MATCH");
+        u8g2.drawStr(0, 36, "Listening...");
     } else {
-        u8g2.drawStr(0, 12, "LoRa RX - MISMATCH");
-    }
+        // Last result
+        u8g2.drawStr(0, 36, stats.wasLastMatched() ? "Last: MATCH" : "Last: MISMATCH");
 
-    // Line 2: Rx count and PDR
-    snprintf(buf, sizeof(buf), "Rx:%lu/%lu PDR:%.1f%%",
-             stats.getTotalReceived(), stats.getExpectedPacketCount(), stats.getPdr());
-    u8g2.drawStr(0, 26, buf);
+        snprintf(buf, sizeof(buf), "Rx:%lu/%lu PDR:%.1f%%",
+                 stats.getTotalReceived(), stats.getExpectedPacketCount(), stats.getPdr());
+        u8g2.drawStr(0, 50, buf);
 
-    // Line 3: Match / Mismatch counts
-    snprintf(buf, sizeof(buf), "OK:%lu FAIL:%lu",
-             stats.getMatchCount(), stats.getMismatchCount());
-    u8g2.drawStr(0, 40, buf);
+        snprintf(buf, sizeof(buf), "OK:%lu FAIL:%lu %.1f%%",
+                 stats.getMatchCount(), stats.getMismatchCount(), stats.getSuccessRate());
+        u8g2.drawStr(0, 64, buf);
 
-    // Line 4: Success rate
-    snprintf(buf, sizeof(buf), "Match rate: %.1f%%", stats.getSuccessRate());
-    u8g2.drawStr(0, 54, buf);
-
-    if (stats.getTotalReceived() > 0) {
-        // Line 5: Last RSSI
         snprintf(buf, sizeof(buf), "RSSI: %.1f dBm", stats.getLastRssi());
-        u8g2.drawStr(0, 68, buf);
+        u8g2.drawStr(0, 78, buf);
 
-        // Line 6: RSSI avg/min/max
         snprintf(buf, sizeof(buf), " %.1f/%.1f/%.1f",
                  stats.getAvgRssi(), stats.getMinRssi(), stats.getMaxRssi());
-        u8g2.drawStr(0, 80, buf);
+        u8g2.drawStr(0, 90, buf);
 
-        // Line 7: Last SNR
         snprintf(buf, sizeof(buf), "SNR: %.1f dB", stats.getLastSnr());
-        u8g2.drawStr(0, 94, buf);
+        u8g2.drawStr(0, 104, buf);
 
-        // Line 8: SNR avg/min/max
         snprintf(buf, sizeof(buf), " %.1f/%.1f/%.1f",
                  stats.getAvgSnr(), stats.getMinSnr(), stats.getMaxSnr());
-        u8g2.drawStr(0, 106, buf);
+        u8g2.drawStr(0, 116, buf);
     }
 
     u8g2.sendBuffer();
@@ -116,12 +116,7 @@ void setup() {
 
     Serial.println("=== LoRa Receiver / Test App ===");
 
-    u8g2.begin();
-    u8g2.clearBuffer();
-    u8g2.setFont(u8g2_font_6x12_tr);
-    u8g2.drawStr(0, 24, "LoRa RX Test");
-    u8g2.drawStr(0, 48, "Initializing...");
-    u8g2.sendBuffer();
+    receptionLog.begin();
 
     blinkLed(5, 150, 150);
 
@@ -135,7 +130,13 @@ void setup() {
         Serial.print("FAILED (code ");
         Serial.print(state);
         Serial.println(")");
+    }
+
+    u8g2.begin();
+
+    if (state != RADIOLIB_ERR_NONE) {
         u8g2.clearBuffer();
+        u8g2.setFont(u8g2_font_6x12_tr);
         u8g2.drawStr(0, 24, "LoRa INIT FAILED");
         u8g2.sendBuffer();
         while (true) { blinkLed(1, 100, 0); delay(900); }
@@ -144,12 +145,67 @@ void setup() {
     Serial.print("Expected payload: ");
     Serial.print(EXPECTED_PAYLOAD_LEN);
     Serial.println(" bytes");
-    Serial.println("Listening for LoRa packets on 868 MHz ...");
 
-    updateDisplay();
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_6x12_tr);
+    u8g2.drawStr(0, 12, "Initialized.");
+    u8g2.drawStr(0, 30, "Waiting for serial");
+    u8g2.drawStr(0, 44, "commands (15s)...");
+    u8g2.drawStr(0, 68, "dump  - print logs");
+    u8g2.drawStr(0, 82, "list  - show files");
+    u8g2.drawStr(0, 96, "clean - delete logs");
+    u8g2.drawStr(0, 110, "help  - show cmds");
+    u8g2.sendBuffer();
+
+    Serial.println();
+    Serial.println("Serial command window (15s) — type help for commands");
+
+    uint32_t cmdWindowEnd = millis() + 15000;
+    while (millis() < cmdWindowEnd) {
+        if (Serial.available()) {
+            appMode = MODE_COMMAND;
+            Serial.println("Entered command mode (LoRa receive disabled)");
+            u8g2.clearBuffer();
+            u8g2.drawStr(0, 24, "Command mode");
+            u8g2.drawStr(0, 48, "LoRa RX disabled");
+            u8g2.drawStr(0, 76, "Type: help");
+            u8g2.sendBuffer();
+            handleSerialCommand();
+            break;
+        }
+        delay(50);
+    }
+
+    if (appMode != MODE_COMMAND) {
+        appMode = MODE_RECEIVE;
+        Serial.println("No commands — entering LoRa receive mode");
+        updateDisplay();
+    }
+}
+
+void handleSerialCommand() {
+    String cmd = Serial.readStringUntil('\n');
+    cmd.trim();
+    if (cmd == "dump") {
+        receptionLog.dumpAllLogs();
+    } else if (cmd == "list") {
+        receptionLog.listLogFiles();
+    } else if (cmd == "clean") {
+        receptionLog.deleteAllLogs();
+    } else if (cmd == "help") {
+        Serial.println("Commands: dump, list, clean, help");
+    }
 }
 
 void loop() {
+    if (appMode == MODE_COMMAND) {
+        if (Serial.available()) {
+            handleSerialCommand();
+        }
+        delay(50);
+        return;
+    }
+
     int state = radio.receive(rxBuf, sizeof(rxBuf), 64000);
 
     if (state == RADIOLIB_ERR_NONE) {
@@ -206,6 +262,8 @@ void loop() {
         }
 
         stats.recordReception(matched, rssi, snr);
+
+        receptionLog.record({matched, rssi, snr, len});
 
         if (matched) {
             blinkLed(2, 400, 200);
