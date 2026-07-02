@@ -1,0 +1,8 @@
+#pragma once
+
+// Copy this file to "WifiConfig.h" and fill in your real credentials.
+// WifiConfig.h is listed in .gitignore and must never be committed.
+
+static constexpr char WIFI_SSID[]     = "your-wifi-ssid";
+static constexpr char WIFI_PASSWORD[] = "your-wifi-password";
+static constexpr char WIFI_HOSTNAME[] = "esp32-lora-gateway";
