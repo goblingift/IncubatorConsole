@@ -3,9 +3,12 @@
 #include <RadioLib.h>
 #include <ArduinoJson.h>
 #include <string.h>
+#include <algorithm>
 #include "AesGcm.h"
 #include "SensorReading.h"
 #include "WifiManager.h"
+#include "AwsIotClient.h"
+#include "AwsIotConfig.h"
 
 // --- SX1262 (Wio SX1262 + XIAO ESP32S3 B2B connector) ---
 // Same pinout as the incubator sender.
@@ -39,7 +42,8 @@ static AesGcm* aesGcm = nullptr;
 static uint8_t rxBuf[256];
 static uint8_t plainBuf[PACKET_SIZE];
 
-static WifiManager wifiManager;
+static WifiManager  wifiManager;
+static AwsIotClient awsIotClient;
 
 void printReceivedJson(const SensorReading* readings, uint8_t count, float rssi, float snr) {
     JsonDocument doc;
@@ -73,6 +77,56 @@ void printReceivedJson(const SensorReading* readings, uint8_t count, float rssi,
     Serial.println("-----------------------------------------------------------");
 }
 
+// Publishes each reading as its own MQTT message, oldest timestamp first.
+// AWS IoT Core has no ordering guarantee across separate publishes, so the
+// caller-side ascending-timestamp order is what makes downstream consumers
+// see a chronological stream.
+void publishReadingsToAws(SensorReading* readings, uint8_t count) {
+    if (!awsIotClient.isConnected()) {
+        Serial.println("[AWS IoT] Not connected — skipping publish");
+        return;
+    }
+
+    std::sort(readings, readings + count, [](const SensorReading& a, const SensorReading& b) {
+        return a.ts < b.ts;
+    });
+
+    for (uint8_t i = 0; i < count; i++) {
+        const SensorReading& r = readings[i];
+
+        JsonDocument doc;
+        doc["deviceId"]     = r.deviceId;
+        doc["timestamp"]    = r.ts;
+        doc["voltage"]      = r.voltage / 100.0f;
+        doc["current"]      = r.current / 100.0f;
+        doc["lux"]          = r.lux;
+        doc["co2"]          = r.co2;
+        doc["temperature"]  = r.temperature / 100.0f;
+        doc["humidity"]     = r.humidity / 100.0f;
+        doc["pitch"]        = r.pitch / 10.0f;
+        doc["roll"]         = r.roll / 10.0f;
+        doc["waterLevel"]   = r.waterLevel;
+        doc["weight"]       = r.weight;
+        doc["peakLoudness"] = r.peakLoudness;
+        doc["relayState"]   = r.relayState;
+
+        char payload[384];
+        serializeJson(doc, payload, sizeof(payload));
+
+        if (awsIotClient.publish(AWS_IOT_TOPIC, payload)) {
+            Serial.print("[AWS IoT] Published reading, device ");
+            Serial.print(r.deviceId);
+            Serial.print(", ts ");
+            Serial.println(r.ts);
+        } else {
+            Serial.print("[AWS IoT] Publish FAILED, device ");
+            Serial.println(r.deviceId);
+        }
+
+        awsIotClient.loop();
+    }
+}
+
 void setup() {
     Serial.begin(115200);
     delay(3000);
@@ -80,6 +134,7 @@ void setup() {
     Serial.println("=== ESP32 LoRa Gateway ===");
 
     wifiManager.begin();
+    awsIotClient.begin();
 
     aesGcm = new AesGcm(AES_KEY);
 
@@ -101,6 +156,7 @@ void setup() {
 
 void loop() {
     wifiManager.loop();
+    awsIotClient.loop();
 
     int state = radio.receive(rxBuf, sizeof(rxBuf));
 
@@ -142,6 +198,7 @@ void loop() {
         memcpy(readings, plainBuf, PACKET_SIZE);
 
         printReceivedJson(readings, READING_COUNT, rssi, snr);
+        publishReadingsToAws(readings, READING_COUNT);
     } else if (state != RADIOLIB_ERR_RX_TIMEOUT) {
         Serial.print("[LoRa] Receive error: ");
         Serial.println(state);

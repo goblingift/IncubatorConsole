@@ -1,0 +1,40 @@
+#pragma once
+
+#include <stdint.h>
+
+// Copy this file to "AwsIotConfig.h" and fill in your AWS IoT Core details.
+// AwsIotConfig.h is gitignored and must never be committed — it contains
+// your device's private key.
+//
+// How to obtain these values:
+//   1. AWS IoT Core Console -> Manage -> All devices -> Things -> create a
+//      thing, and let it auto-generate a certificate + attach a policy that
+//      allows iot:Connect / iot:Publish on this client/topic.
+//   2. AWS_IOT_ENDPOINT: IoT Core -> Settings -> Device data endpoint
+//      (looks like "xxxxxxxxxxxxxx-ats.iot.<region>.amazonaws.com").
+//   3. Download the certificate, private key, and "Amazon Root CA 1" shown
+//      during thing creation and paste their PEM contents below, unchanged
+//      (keep the BEGIN/END lines).
+
+static constexpr char    AWS_IOT_ENDPOINT[]  = "your-endpoint-ats.iot.eu-central-1.amazonaws.com";
+static constexpr uint16_t AWS_IOT_PORT       = 8883;
+static constexpr char    AWS_IOT_CLIENT_ID[] = "esp32-lora-gateway";
+static constexpr char    AWS_IOT_TOPIC[]     = "incubator/data";
+
+static const char AWS_IOT_ROOT_CA[] = R"EOF(
+-----BEGIN CERTIFICATE-----
+PASTE-AMAZON-ROOT-CA-1-HERE
+-----END CERTIFICATE-----
+)EOF";
+
+static const char AWS_IOT_CERT[] = R"EOF(
+-----BEGIN CERTIFICATE-----
+PASTE-DEVICE-CERTIFICATE-HERE
+-----END CERTIFICATE-----
+)EOF";
+
+static const char AWS_IOT_PRIVATE_KEY[] = R"EOF(
+-----BEGIN RSA PRIVATE KEY-----
+PASTE-DEVICE-PRIVATE-KEY-HERE
+-----END RSA PRIVATE KEY-----
+)EOF";

@@ -1,3 +1,4 @@
 .pio
 .vscode
 src/WifiConfig.h
+src/AwsIotConfig.h
