@@ -81,8 +81,10 @@ TaskHandle_t soundTaskHandle = NULL;
 TaskHandle_t sensorTaskHandle = NULL;
 
 volatile int g_highestLoudness = 0;
-volatile uint8_t g_relayState = 0;  // bitmask: bit0=relay1, bit1=relay2, bit2=relay3, bit3=relay4
+volatile uint8_t g_actuatorState = 0;  // bitmask: bit0=relay1, bit1=relay2, bit2=relay3, bit3=relay4, bit4=humidifier
 static bool g_rtcOk = false;
+
+#define HUMIDIFIER_BIT (1 << 4)
 
 #define WTR_LVL_THRESHOLD 100
 #define WTR_LVL_HIGH_ADDR 0x78
@@ -93,6 +95,8 @@ uint32_t readTimestamp();
 void relayOn(int ch);
 void relayOff(int ch);
 void testRelay();
+void humidifierOn();
+void humidifierOff();
 // bool isButtonPressed();
 // void playSoundNotification();
 void WTR_LVL_readBytes(byte addr, byte *buf, byte len);
@@ -158,9 +162,9 @@ void setup() {
 
   Serial.println("Test Humidifier for 2secs");
   pinMode(HUMID_PIN, OUTPUT);
-  digitalWrite(HUMID_PIN, HIGH);
+  humidifierOn();
   delay(2000);
-  digitalWrite(HUMID_PIN, LOW);
+  humidifierOff();
 
   Serial.print("[SX1262] Initializing ... ");
   int loraState = radio.begin(LORA_FREQ_MHZ, LORA_BW_KHZ, LORA_SF, LORA_CR,
@@ -257,10 +261,10 @@ void sensorReadingTask(void *parameter) {
     Serial.print("Water level:  "); Serial.print(waterLevel);        Serial.println(" %");
     Serial.print("Weight:       "); Serial.print(weight, 1);         Serial.println(" g");
     Serial.print("Peak loudness:"); Serial.print(g_highestLoudness); Serial.println(" (last 10s)");
-    char relayStr[5];
-    for (int i = 0; i < 4; i++) relayStr[i] = (g_relayState & (1 << i)) ? '1' : '0';
-    relayStr[4] = '\0';
-    Serial.print("Relay state:  "); Serial.println(relayStr);
+    char relayStr[6];
+    for (int i = 0; i < 5; i++) relayStr[i] = (g_actuatorState & (1 << i)) ? '1' : '0';
+    relayStr[5] = '\0';
+    Serial.print("Actuator state (relay1-4,humid): "); Serial.println(relayStr);
     Serial.println("----------------------");
 
     // --- build binary reading and add to LoRa payload ---
@@ -278,7 +282,7 @@ void sensorReadingTask(void *parameter) {
     reading.waterLevel   = (uint8_t)waterLevel;
     reading.weight       = (uint16_t)constrain((long)weight, 0L, 20000L);
     reading.peakLoudness = (uint16_t)g_highestLoudness;
-    reading.relayState   = g_relayState;
+    reading.actuatorState = g_actuatorState;
 
     loraPayload->addReading(reading);
     Serial.print("Readings buffered: ");
@@ -376,8 +380,11 @@ void soundRecorderTask(void *parameter) {
   }
 }
 
-void relayOn(int ch)  { relay.turn_on_channel(ch);  g_relayState |=  (1 << (ch - 1)); }
-void relayOff(int ch) { relay.turn_off_channel(ch); g_relayState &= ~(1 << (ch - 1)); }
+void relayOn(int ch)  { relay.turn_on_channel(ch);  g_actuatorState |=  (1 << (ch - 1)); }
+void relayOff(int ch) { relay.turn_off_channel(ch); g_actuatorState &= ~(1 << (ch - 1)); }
+
+void humidifierOn()  { digitalWrite(HUMID_PIN, HIGH); g_actuatorState |=  HUMIDIFIER_BIT; }
+void humidifierOff() { digitalWrite(HUMID_PIN, LOW);  g_actuatorState &= ~HUMIDIFIER_BIT; }
 
 void testRelay() {
   DEBUG_PRINT.println("Channel 1 (12V fan) on");

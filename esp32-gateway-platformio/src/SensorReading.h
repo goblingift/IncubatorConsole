@@ -24,7 +24,7 @@ struct __attribute__((packed)) SensorReading {
     uint8_t  waterLevel;    // %
     uint16_t weight;        // g (integer)
     uint16_t peakLoudness;  // ADC units
-    uint8_t  relayState;    // bitmask: bit0=relay1 … bit3=relay4
+    uint8_t  actuatorState; // bitmask: bit0=relay1, bit1=relay2, bit2=relay3, bit3=relay4, bit4=humidifier
 };
 
 static_assert(sizeof(SensorReading) == 27, "SensorReading must be exactly 27 bytes");

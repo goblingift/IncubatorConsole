@@ -68,7 +68,7 @@ void printReceivedJson(const SensorReading* readings, uint8_t count, float rssi,
         o["waterLevel"]   = r.waterLevel;
         o["weight"]       = r.weight;
         o["peakLoudness"] = r.peakLoudness;
-        o["relayState"]   = r.relayState;
+        o["actuatorState"] = r.actuatorState;
     }
 
     Serial.println("--- Prepared JSON (ready for AWS IoT Core forwarding) ---");
@@ -108,7 +108,7 @@ void publishReadingsToAws(SensorReading* readings, uint8_t count) {
         doc["waterLevel"]   = r.waterLevel;
         doc["weight"]       = r.weight;
         doc["peakLoudness"] = r.peakLoudness;
-        doc["relayState"]   = r.relayState;
+        doc["actuatorState"] = r.actuatorState;
 
         char payload[384];
         serializeJson(doc, payload, sizeof(payload));
