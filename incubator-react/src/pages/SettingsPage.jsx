@@ -10,7 +10,7 @@ const DEFAULTS = {
     humidity_min:       45,
     humidity_max:       70,
     co2_max:            5000,
-    light_max:          12,
+    light_avg_max:      500,
     pitch_deg_max:      15,
     roll_deg_max:       15,
     sound_max:          80,
@@ -62,7 +62,7 @@ export default function SettingsPage() {
                 }));
             } catch (error) {
                 console.error('Error loading settings:', error);
-                setErrorMessage(error.message || 'Fehler beim Laden der Sollwerte');
+                setErrorMessage(error.message || 'Error loading setpoints');
             } finally {
                 setLoadingSettings(false);
             }
@@ -82,7 +82,7 @@ export default function SettingsPage() {
 
             const session = await fetchAuthSession();
             const idToken = session.tokens?.idToken?.toString();
-            if (!idToken) throw new Error('Kein ID-Token gefunden. Bitte neu anmelden.');
+            if (!idToken) throw new Error('No ID token found. Please log in again.');
 
             const response = await fetch(`${SETTINGS_API_URL}/${selectedDeviceId}`, {
                 method: 'POST',
@@ -96,10 +96,10 @@ export default function SettingsPage() {
             const data = await response.json();
             if (!response.ok) throw new Error(data?.message || `POST failed: ${response.status}`);
 
-            setStatusMessage('Sollwerte erfolgreich gespeichert');
+            setStatusMessage('Setpoints saved successfully');
         } catch (error) {
             console.error('Error saving settings:', error);
-            setErrorMessage(error.message || 'Fehler beim Speichern der Sollwerte');
+            setErrorMessage(error.message || 'Error saving setpoints');
         } finally {
             setSaving(false);
         }
@@ -108,8 +108,8 @@ export default function SettingsPage() {
     if (loadingSettings) {
         return (
             <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-                <h2 className="text-xl font-semibold text-zinc-900">Sollwerte</h2>
-                <p className="mt-4 text-zinc-600">Lade gespeicherte Sollwerte...</p>
+                <h2 className="text-xl font-semibold text-zinc-900">Setpoints</h2>
+                <p className="mt-4 text-zinc-600">Loading saved setpoints...</p>
             </div>
         );
     }
@@ -117,18 +117,18 @@ export default function SettingsPage() {
     return (
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm space-y-8 max-w-2xl mx-auto">
             <div>
-                <h2 className="text-xl font-semibold text-zinc-900">Sollwerte</h2>
+                <h2 className="text-xl font-semibold text-zinc-900">Setpoints</h2>
                 <p className="mt-1 text-sm text-zinc-500">
-                    Grenzwerte und Zielwerte für den Inkubator konfigurieren.
+                    Configure limits and target values for the incubator.
                 </p>
             </div>
 
-            <Section title="Temperatur">
+            <Section title="Temperature">
                 <SliderRow label="Minimum"  value={settings.temperature_min}    onChange={set('temperature_min')}    min={-10} max={60} step={0.1} unit="°C" />
                 <SliderRow label="Maximum"  value={settings.temperature_max}    onChange={set('temperature_max')}    min={-10} max={60} step={0.1} unit="°C" />
             </Section>
 
-            <Section title="Luftfeuchte">
+            <Section title="Humidity">
                 <SliderRow label="Minimum"  value={settings.humidity_min}    onChange={set('humidity_min')}    min={0} max={100} step={1} unit="%" />
                 <SliderRow label="Maximum"  value={settings.humidity_max}    onChange={set('humidity_max')}    min={0} max={100} step={1} unit="%" />
             </Section>
@@ -137,35 +137,35 @@ export default function SettingsPage() {
                 <SliderRow label="Maximum" value={settings.co2_max} onChange={set('co2_max')} min={400} max={40000} step={100} unit="ppm" />
             </Section>
 
-            <Section title="Beleuchtung">
-                <SliderRow label="Lichtstunden pro Tag" value={settings.light_max} onChange={set('light_max')} min={0} max={24} step={0.5} unit="h" />
+            <Section title="Lighting">
+                <SliderRow label="24h average maximum" value={settings.light_avg_max} onChange={set('light_avg_max')} min={0} max={2000} step={10} unit="lux" />
             </Section>
 
-            <Section title="Lautstärke">
+            <Section title="Sound">
                 <SliderRow label="Maximum" value={settings.sound_max} onChange={set('sound_max')} min={0} max={120} step={1} unit="dB" />
             </Section>
 
-            <Section title="Gewicht">
+            <Section title="Weight">
                 <SliderRow label="Minimum" value={settings.weight_min} onChange={set('weight_min')} min={0} max={20000} step={10} unit="g" />
                 <SliderRow label="Maximum" value={settings.weight_max} onChange={set('weight_max')} min={0} max={20000} step={10} unit="g" />
             </Section>
 
-            <Section title="Neigung (max. Auslenkung)">
+            <Section title="Tilt (max. deflection)">
                 <NumberRow label="Pitch" value={settings.pitch_deg_max} onChange={set('pitch_deg_max')} unit="°" />
                 <NumberRow label="Roll"  value={settings.roll_deg_max}  onChange={set('roll_deg_max')}  unit="°" />
             </Section>
 
-            <Section title="Spannung">
+            <Section title="Voltage">
                 <SliderRow label="Minimum" value={settings.voltage_min} onChange={set('voltage_min')} min={0} max={30} step={0.1} unit="V" />
                 <SliderRow label="Maximum" value={settings.voltage_max} onChange={set('voltage_max')} min={0} max={30} step={0.1} unit="V" />
             </Section>
 
-            <Section title="Stromstärke">
+            <Section title="Current">
                 <SliderRow label="Minimum" value={settings.current_min} onChange={set('current_min')} min={0} max={20} step={0.1} unit="A" />
                 <SliderRow label="Maximum" value={settings.current_max} onChange={set('current_max')} min={0} max={20} step={0.1} unit="A" />
             </Section>
 
-            <Section title="Wasserstand">
+            <Section title="Water Level">
                 <SliderRow label="Minimum" value={settings.water_level_min} onChange={set('water_level_min')} min={0} max={100} step={1} unit="%" />
                 <SliderRow label="Maximum" value={settings.water_level_max} onChange={set('water_level_max')} min={0} max={100} step={1} unit="%" />
             </Section>
@@ -176,7 +176,7 @@ export default function SettingsPage() {
                     disabled={saving || !selectedDeviceId}
                     className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                    {saving ? 'Speichern...' : 'Sollwerte speichern'}
+                    {saving ? 'Saving...' : 'Save setpoints'}
                 </button>
                 {statusMessage && <p className="text-sm text-green-600">{statusMessage}</p>}
                 {errorMessage  && <p className="text-sm text-red-600">{errorMessage}</p>}

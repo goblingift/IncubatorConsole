@@ -26,7 +26,7 @@ export default function ProtectedRoute({ children }) {
     }, []);
 
     if (status === 'loading') {
-        return <p className="text-center text-gray-500">Prüfe Anmeldung…</p>;
+        return <p className="text-center text-gray-500">Checking login…</p>;
     }
 
     if (status === 'unauthenticated') {

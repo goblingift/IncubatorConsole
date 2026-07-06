@@ -23,14 +23,14 @@ export default function DeviceSelector() {
                 className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 transition"
             >
                 <DeviceIcon />
-                <span>{loading ? 'Lade...' : displayName}</span>
+                <span>{loading ? 'Loading...' : displayName}</span>
                 <ChevronIcon open={open} />
             </button>
 
             {open && (
                 <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
                     {devices.length === 0 ? (
-                        <p className="px-4 py-3 text-sm text-gray-400">Keine Geräte gefunden</p>
+                        <p className="px-4 py-3 text-sm text-gray-400">No devices found</p>
                     ) : (
                         devices.map(device => {
                             const id   = device.device_id ?? device;

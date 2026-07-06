@@ -11,7 +11,7 @@ export default function LoginPage() {
                 <div className="absolute -right-36 top-10 hidden md:block">
                     <div className="relative w-72 rounded-[999px] border-4 border-black bg-white px-6 py-5 shadow-lg">
                         <p className="text-center text-xl font-medium leading-snug text-red-500">
-                            Benutze den Test-Account:
+                            Use the test account:
                         </p>
 
                         <div className="mt-2 space-y-1 text-center text-lg leading-snug text-red-500">
@@ -32,7 +32,7 @@ export default function LoginPage() {
                 <div className="mb-4 md:hidden">
                     <div className="rounded-2xl border-2 border-black bg-white px-4 py-3 shadow-md">
                         <p className="text-center text-sm font-medium leading-relaxed text-red-500 break-words">
-                            Test-Account:<br />
+                            Test account:<br />
                             Email: test-incubator@gmx.net<br />
                             PW: Secret123!
                         </p>
@@ -41,7 +41,7 @@ export default function LoginPage() {
 
                 <div className="bg-white p-6 md:p-8 rounded-2xl shadow-xl overflow-hidden">
                     <h2 className="text-2xl font-semibold text-gray-700 mb-6 text-center">
-                        Anmeldung
+                        Login
                     </h2>
 
                     <div className="auth-wrapper">

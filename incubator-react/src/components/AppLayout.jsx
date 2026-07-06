@@ -25,7 +25,7 @@ export default function AppLayout() {
                             Dashboard
                         </Link>
                         <Link to="/settings" className={navLinkClass('/settings')}>
-                            Einstellungen
+                            Settings
                         </Link>
                     </nav>
                 </div>
