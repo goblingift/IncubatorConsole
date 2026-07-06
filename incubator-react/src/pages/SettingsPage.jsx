@@ -5,20 +5,23 @@ import { useDevice } from '../context/DeviceContext';
 const SETTINGS_API_URL = import.meta.env.VITE_SETTINGS_API_URL;
 
 const DEFAULTS = {
-    temperature_target: 37.5,
     temperature_min:    36.0,
     temperature_max:    39.0,
-    humidity_target:    55,
     humidity_min:       45,
     humidity_max:       70,
     co2_max:            5000,
     light_max:          12,
-    gyroscope_x_max:    10,
-    gyroscope_y_max:    10,
-    gyroscope_z_max:    10,
+    pitch_deg_max:      15,
+    roll_deg_max:       15,
     sound_max:          80,
     weight_min:         0,
     weight_max:         5000,
+    voltage_min:        11,
+    voltage_max:        13,
+    current_min:        0,
+    current_max:        2,
+    water_level_min:    10,
+    water_level_max:    100,
 };
 
 export default function SettingsPage() {
@@ -121,13 +124,11 @@ export default function SettingsPage() {
             </div>
 
             <Section title="Temperatur">
-                <SliderRow label="Zielwert" value={settings.temperature_target} onChange={set('temperature_target')} min={-10} max={60} step={0.1} unit="°C" />
                 <SliderRow label="Minimum"  value={settings.temperature_min}    onChange={set('temperature_min')}    min={-10} max={60} step={0.1} unit="°C" />
                 <SliderRow label="Maximum"  value={settings.temperature_max}    onChange={set('temperature_max')}    min={-10} max={60} step={0.1} unit="°C" />
             </Section>
 
             <Section title="Luftfeuchte">
-                <SliderRow label="Zielwert" value={settings.humidity_target} onChange={set('humidity_target')} min={0} max={100} step={1} unit="%" />
                 <SliderRow label="Minimum"  value={settings.humidity_min}    onChange={set('humidity_min')}    min={0} max={100} step={1} unit="%" />
                 <SliderRow label="Maximum"  value={settings.humidity_max}    onChange={set('humidity_max')}    min={0} max={100} step={1} unit="%" />
             </Section>
@@ -149,10 +150,24 @@ export default function SettingsPage() {
                 <SliderRow label="Maximum" value={settings.weight_max} onChange={set('weight_max')} min={0} max={20000} step={10} unit="g" />
             </Section>
 
-            <Section title="Gyroskop (max. Auslenkung)">
-                <NumberRow label="X" value={settings.gyroscope_x_max} onChange={set('gyroscope_x_max')} unit="°/s" />
-                <NumberRow label="Y" value={settings.gyroscope_y_max} onChange={set('gyroscope_y_max')} unit="°/s" />
-                <NumberRow label="Z" value={settings.gyroscope_z_max} onChange={set('gyroscope_z_max')} unit="°/s" />
+            <Section title="Neigung (max. Auslenkung)">
+                <NumberRow label="Pitch" value={settings.pitch_deg_max} onChange={set('pitch_deg_max')} unit="°" />
+                <NumberRow label="Roll"  value={settings.roll_deg_max}  onChange={set('roll_deg_max')}  unit="°" />
+            </Section>
+
+            <Section title="Spannung">
+                <SliderRow label="Minimum" value={settings.voltage_min} onChange={set('voltage_min')} min={0} max={30} step={0.1} unit="V" />
+                <SliderRow label="Maximum" value={settings.voltage_max} onChange={set('voltage_max')} min={0} max={30} step={0.1} unit="V" />
+            </Section>
+
+            <Section title="Stromstärke">
+                <SliderRow label="Minimum" value={settings.current_min} onChange={set('current_min')} min={0} max={20} step={0.1} unit="A" />
+                <SliderRow label="Maximum" value={settings.current_max} onChange={set('current_max')} min={0} max={20} step={0.1} unit="A" />
+            </Section>
+
+            <Section title="Wasserstand">
+                <SliderRow label="Minimum" value={settings.water_level_min} onChange={set('water_level_min')} min={0} max={100} step={1} unit="%" />
+                <SliderRow label="Maximum" value={settings.water_level_max} onChange={set('water_level_max')} min={0} max={100} step={1} unit="%" />
             </Section>
 
             <div className="flex items-center gap-3 pt-2 border-t border-zinc-100">
