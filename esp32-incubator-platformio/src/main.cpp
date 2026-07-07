@@ -121,11 +121,11 @@ void setup() {
     Serial.println("DS1307 RTC not found on I2C (0x68)! Check wiring.");
   } else {
     // To set the RTC time: uncomment the three lines below, flash once, then re-comment and reflash.
-    //rtc.fillByYMD(2026, 6, 1);
-    //rtc.fillByHMS(12, 8, 0);
+    //rtc.fillByYMD(2026, 7, 7);
+    //rtc.fillByHMS(16, 42, 0);
     //rtc.setTime();
     rtc.getTime();
-    Serial.printf("DS1307 RTC OK — time: %02d:%02d:%02d\n", rtc.hour, rtc.minute, rtc.second);
+    Serial.printf("DS1307 RTC OK — time (UTC timezone): %02d:%02d:%02d\n", rtc.hour, rtc.minute, rtc.second);
   }
 
   if (!ina260.begin()) {

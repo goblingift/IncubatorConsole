@@ -45,6 +45,16 @@ static uint8_t plainBuf[PACKET_SIZE];
 static WifiManager  wifiManager;
 static AwsIotClient awsIotClient;
 
+// Formats the on-wire numeric device ID into the string form used throughout
+// the AWS backend (DynamoDB partition key, API paths, etc.), e.g. 1 -> "incubator-01".
+// Kept in the gateway rather than the incubator sender since the LoRa payload
+// stays a compact binary struct — only the JSON/MQTT boundary needs the string form.
+String formatDeviceId(uint8_t deviceId) {
+    char buf[16];
+    snprintf(buf, sizeof(buf), "incubator-%02u", deviceId);
+    return String(buf);
+}
+
 void printReceivedJson(const SensorReading* readings, uint8_t count, float rssi, float snr) {
     JsonDocument doc;
     doc["rssi"] = rssi;
@@ -55,20 +65,20 @@ void printReceivedJson(const SensorReading* readings, uint8_t count, float rssi,
     for (uint8_t i = 0; i < count; i++) {
         const SensorReading& r = readings[i];
         JsonObject o = readingsArr.add<JsonObject>();
-        o["deviceId"]     = r.deviceId;
-        o["timestamp"]    = r.ts;
-        o["voltage"]      = r.voltage / 100.0f;
-        o["current"]      = r.current / 100.0f;
-        o["lux"]          = r.lux;
-        o["co2"]          = r.co2;
-        o["temperature"]  = r.temperature / 100.0f;
-        o["humidity"]     = r.humidity / 100.0f;
-        o["pitch"]        = r.pitch / 10.0f;
-        o["roll"]         = r.roll / 10.0f;
-        o["waterLevel"]   = r.waterLevel;
-        o["weight"]       = r.weight;
-        o["peakLoudness"] = r.peakLoudness;
-        o["actuatorState"] = r.actuatorState;
+        o["device_id"]           = formatDeviceId(r.deviceId);
+        o["timestamp"]           = r.ts;
+        o["voltage"]             = r.voltage / 100.0f;
+        o["current"]             = r.current / 100.0f;
+        o["light_intensity"]     = r.lux;
+        o["co2_ppm"]             = r.co2;
+        o["temperature_celsius"] = r.temperature / 100.0f;
+        o["humidity_rh"]         = r.humidity / 100.0f;
+        o["pitch_deg"]           = r.pitch / 10.0f;
+        o["roll_deg"]            = r.roll / 10.0f;
+        o["water_level"]         = r.waterLevel;
+        o["weight_gram"]         = r.weight;
+        o["sound_intensity"]     = r.peakLoudness;
+        o["actuator_state"]      = r.actuatorState;
     }
 
     Serial.println("--- Prepared JSON (ready for AWS IoT Core forwarding) ---");
@@ -95,32 +105,32 @@ void publishReadingsToAws(SensorReading* readings, uint8_t count) {
         const SensorReading& r = readings[i];
 
         JsonDocument doc;
-        doc["deviceId"]     = r.deviceId;
-        doc["timestamp"]    = r.ts;
-        doc["voltage"]      = r.voltage / 100.0f;
-        doc["current"]      = r.current / 100.0f;
-        doc["lux"]          = r.lux;
-        doc["co2"]          = r.co2;
-        doc["temperature"]  = r.temperature / 100.0f;
-        doc["humidity"]     = r.humidity / 100.0f;
-        doc["pitch"]        = r.pitch / 10.0f;
-        doc["roll"]         = r.roll / 10.0f;
-        doc["waterLevel"]   = r.waterLevel;
-        doc["weight"]       = r.weight;
-        doc["peakLoudness"] = r.peakLoudness;
-        doc["actuatorState"] = r.actuatorState;
+        doc["device_id"]           = formatDeviceId(r.deviceId);
+        doc["timestamp"]           = r.ts;
+        doc["voltage"]             = r.voltage / 100.0f;
+        doc["current"]             = r.current / 100.0f;
+        doc["light_intensity"]     = r.lux;
+        doc["co2_ppm"]             = r.co2;
+        doc["temperature_celsius"] = r.temperature / 100.0f;
+        doc["humidity_rh"]         = r.humidity / 100.0f;
+        doc["pitch_deg"]           = r.pitch / 10.0f;
+        doc["roll_deg"]            = r.roll / 10.0f;
+        doc["water_level"]         = r.waterLevel;
+        doc["weight_gram"]         = r.weight;
+        doc["sound_intensity"]     = r.peakLoudness;
+        doc["actuator_state"]      = r.actuatorState;
 
         char payload[384];
         serializeJson(doc, payload, sizeof(payload));
 
         if (awsIotClient.publish(AWS_IOT_TOPIC, payload)) {
             Serial.print("[AWS IoT] Published reading, device ");
-            Serial.print(r.deviceId);
+            Serial.print(formatDeviceId(r.deviceId));
             Serial.print(", ts ");
             Serial.println(r.ts);
         } else {
             Serial.print("[AWS IoT] Publish FAILED, device ");
-            Serial.println(r.deviceId);
+            Serial.println(formatDeviceId(r.deviceId));
         }
 
         awsIotClient.loop();
