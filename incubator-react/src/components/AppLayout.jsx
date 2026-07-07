@@ -27,6 +27,9 @@ export default function AppLayout() {
                         <Link to="/settings" className={navLinkClass('/settings')}>
                             Settings
                         </Link>
+                        <Link to="/alerts" className={navLinkClass('/alerts')}>
+                            Alerts
+                        </Link>
                     </nav>
                 </div>
 

@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom';
 import AppLayout from './components/AppLayout';
 import DashboardPage from './pages/DashboardPage';
 import SettingsPage from './pages/SettingsPage';
+import AlertsPage from './pages/AlertsPage';
 import LoginPage from './pages/LoginPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import { DeviceProvider } from './context/DeviceContext';
@@ -18,6 +19,14 @@ function App() {
                         element={
                             <ProtectedRoute>
                                 <SettingsPage />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="alerts"
+                        element={
+                            <ProtectedRoute>
+                                <AlertsPage />
                             </ProtectedRoute>
                         }
                     />
