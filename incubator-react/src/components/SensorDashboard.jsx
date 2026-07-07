@@ -1,5 +1,8 @@
 import { useSensorData } from "../hooks/useSensorData";
 import { useDevice } from "../context/DeviceContext";
+import { MEASUREMENT_FIELDS_BY_KEY } from "../constants/measurementFields";
+
+const ACTUATOR_FIELDS = ["relay_state_1", "relay_state_2", "relay_state_3", "relay_state_4", "humidifier_state"];
 
 export default function SensorDashboard() {
     const { selectedDeviceId } = useDevice();
@@ -22,6 +25,24 @@ export default function SensorDashboard() {
                 <SensorCard label="Weight"      value={`${data.weight_gram} g`}          valueColor="text-yellow-500" />
                 <SensorCard label="Light"       value={`${data.light_intensity}`}         valueColor="text-orange-400" />
                 <SensorCard label="Sound"       value={`${data.sound_intensity} dB`}     valueColor="text-gray-600" />
+                <SensorCard label="Voltage"     value={`${data.voltage} V`}              valueColor="text-sky-600" />
+                <SensorCard label="Current"     value={`${data.current} A`}              valueColor="text-indigo-500" />
+                <SensorCard label="Water Level" value={`${data.water_level} %`}          valueColor="text-cyan-600" />
+                <SensorCard label="Pitch"       value={`${data.pitch_deg}°`}             valueColor="text-fuchsia-500" />
+                <SensorCard label="Roll"        value={`${data.roll_deg}°`}              valueColor="text-rose-500" />
+            </div>
+
+            <div>
+                <p className="text-xs text-gray-400 mb-2">Actuators</p>
+                <div className="flex flex-wrap gap-2">
+                    {ACTUATOR_FIELDS.map(key => (
+                        <StatusBadge
+                            key={key}
+                            label={MEASUREMENT_FIELDS_BY_KEY[key].label}
+                            on={Number(data[key]) === 1}
+                        />
+                    ))}
+                </div>
             </div>
         </div>
     );
@@ -33,5 +54,16 @@ function SensorCard({ label, value, valueColor }) {
             <p className="text-xs text-gray-400 mb-1">{label}</p>
             <p className={`text-3xl font-bold ${valueColor}`}>{value}</p>
         </div>
+    );
+}
+
+function StatusBadge({ label, on }) {
+    return (
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
+            on ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+        }`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${on ? "bg-green-500" : "bg-gray-400"}`} />
+            {label}: {on ? "ON" : "OFF"}
+        </span>
     );
 }
