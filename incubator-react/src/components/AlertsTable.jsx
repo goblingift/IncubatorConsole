@@ -7,7 +7,7 @@ const FIELD_LABELS = {
     humidity_rh: "Humidity",
     co2_ppm: "CO₂",
     light_intensity_avg_24h: "Light (24h avg)",
-    sound_intensity: "Sound",
+    sound_intensity: "Sound (raw)",
     weight_gram: "Weight",
     pitch_deg: "Pitch",
     roll_deg: "Roll",

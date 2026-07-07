@@ -141,8 +141,11 @@ export default function SettingsPage() {
                 <SliderRow label="24h average maximum" value={settings.light_avg_max} onChange={set('light_avg_max')} min={0} max={2000} step={10} unit="lux" />
             </Section>
 
-            <Section title="Sound">
-                <SliderRow label="Maximum" value={settings.sound_max} onChange={set('sound_max')} min={0} max={120} step={1} unit="dB" />
+            <Section title="Sound (raw sensor value)">
+                <p className="-mt-2 mb-1 text-xs text-zinc-400">
+                    Reference point: raw value 752 ≈ 83 dB sound pressure.
+                </p>
+                <SliderRow label="Maximum" value={settings.sound_max} onChange={set('sound_max')} min={0} max={2000} step={1} unit="" />
             </Section>
 
             <Section title="Weight">

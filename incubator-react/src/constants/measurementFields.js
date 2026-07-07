@@ -4,7 +4,7 @@ export const MEASUREMENT_FIELDS = [
     { key: "co2_ppm", label: "CO₂", unit: "ppm", kind: "numeric" },
     { key: "weight_gram", label: "Weight", unit: "g", kind: "numeric" },
     { key: "light_intensity", label: "Light", unit: "lux", kind: "numeric" },
-    { key: "sound_intensity", label: "Sound", unit: "dB", kind: "numeric" },
+    { key: "sound_intensity", label: "Sound (raw)", unit: "", kind: "numeric" },
     { key: "voltage", label: "Voltage", unit: "V", kind: "numeric" },
     { key: "current", label: "Current", unit: "A", kind: "numeric" },
     { key: "water_level", label: "Water Level", unit: "%", kind: "numeric" },

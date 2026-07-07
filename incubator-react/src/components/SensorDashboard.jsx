@@ -24,7 +24,7 @@ export default function SensorDashboard() {
                 <SensorCard label="CO₂"         value={`${data.co2_ppm} ppm`}            valueColor="text-purple-500" />
                 <SensorCard label="Weight"      value={`${data.weight_gram} g`}          valueColor="text-yellow-500" />
                 <SensorCard label="Light"       value={`${data.light_intensity}`}         valueColor="text-orange-400" />
-                <SensorCard label="Sound"       value={`${data.sound_intensity} dB`}     valueColor="text-gray-600" />
+                <SensorCard label="Sound (raw)" value={`${data.sound_intensity}`}        valueColor="text-gray-600" />
                 <SensorCard label="Voltage"     value={`${data.voltage} V`}              valueColor="text-sky-600" />
                 <SensorCard label="Current"     value={`${data.current} A`}              valueColor="text-indigo-500" />
                 <SensorCard label="Water Level" value={`${data.water_level} %`}          valueColor="text-cyan-600" />
