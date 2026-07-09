@@ -6,6 +6,8 @@
 #include <algorithm>
 #include "AesGcm.h"
 #include "SensorReading.h"
+#include "SettingsMessages.h"
+#include "SettingsService.h"
 #include "WifiManager.h"
 #include "AwsIotClient.h"
 #include "AwsIotConfig.h"
@@ -37,13 +39,15 @@ static const uint8_t AES_KEY[AesGcm::KEY_SIZE] = {
 static constexpr uint8_t READING_COUNT = 6;
 static constexpr size_t  PACKET_SIZE   = READING_COUNT * sizeof(SensorReading);  // 162 bytes
 static constexpr size_t  ENCRYPTED_SIZE = PACKET_SIZE + AesGcm::OVERHEAD;        // 190 bytes
+static constexpr size_t  SETTINGS_REQUEST_ENC_SIZE = sizeof(SettingsRequest) + AesGcm::OVERHEAD;  // 34 bytes
 
 static AesGcm* aesGcm = nullptr;
 static uint8_t rxBuf[256];
 static uint8_t plainBuf[PACKET_SIZE];
 
-static WifiManager  wifiManager;
-static AwsIotClient awsIotClient;
+static WifiManager     wifiManager;
+static AwsIotClient    awsIotClient;
+static SettingsService settingsService;
 
 // Formats the on-wire numeric device ID into the string form used throughout
 // the AWS backend (DynamoDB partition key, API paths, etc.), e.g. 1 -> "incubator-01".
@@ -137,6 +141,48 @@ void publishReadingsToAws(SensorReading* readings, uint8_t count) {
     }
 }
 
+// Answers a decrypted-and-valid FETCH_SETTINGS poll. Stays silent (= "you are
+// up to date") when the cache is empty or the versions already match; the
+// incubator only expects a reply when something changed.
+void handleSettingsRequest(const uint8_t* enc, size_t encLen) {
+    SettingsRequest req;
+    size_t plainLen = 0;
+    if (!aesGcm->decrypt(enc, encLen, reinterpret_cast<uint8_t*>(&req), plainLen)
+        || plainLen != sizeof(req) || req.msgType != SETTINGS_MSG_REQUEST) {
+        Serial.println("[Settings] Invalid settings request — dropping");
+        return;
+    }
+
+    Serial.print("[Settings] Request from ");
+    Serial.print(formatDeviceId(req.deviceId));
+    Serial.printf(", version 0x%08lX\n", (unsigned long)req.settingsVersion);
+
+    SettingsResponse resp;
+    if (!settingsService.get(req.deviceId, resp)) {
+        Serial.println("[Settings] No cached settings yet — staying silent");
+        return;
+    }
+    if (resp.settingsVersion == req.settingsVersion) {
+        Serial.println("[Settings] Device is up to date — staying silent");
+        return;
+    }
+
+    uint8_t encBuf[sizeof(SettingsResponse) + AesGcm::OVERHEAD];
+    size_t  encOut = 0;
+    if (!aesGcm->encrypt(reinterpret_cast<const uint8_t*>(&resp), sizeof(resp), encBuf, encOut)) {
+        Serial.println("[Settings] Response encryption failed");
+        return;
+    }
+
+    int txState = radio.transmit(encBuf, encOut);
+    if (txState == RADIOLIB_ERR_NONE) {
+        Serial.printf("[Settings] Sent settings version 0x%08lX (%u bytes)\n",
+                      (unsigned long)resp.settingsVersion, (unsigned)encOut);
+    } else {
+        Serial.printf("[Settings] Response TX failed (code %d)\n", txState);
+    }
+}
+
 void setup() {
     Serial.begin(115200);
     delay(3000);
@@ -146,7 +192,10 @@ void setup() {
     wifiManager.begin();
     awsIotClient.begin();
 
-    aesGcm = new AesGcm(AES_KEY);
+    // Nonce domain 0x01: the gateway encrypts settings responses under the
+    // same pre-shared key as the incubator (domain 0x00) — the domain byte
+    // keeps the two nonce streams disjoint.
+    aesGcm = new AesGcm(AES_KEY, 0x01);
 
     Serial.print("[SX1262] Initializing ... ");
     int state = radio.begin(LORA_FREQ_MHZ, LORA_BW_KHZ, LORA_SF, LORA_CR,
@@ -167,6 +216,7 @@ void setup() {
 void loop() {
     wifiManager.loop();
     awsIotClient.loop();
+    settingsService.loop(wifiManager.isConnected());
 
     int state = radio.receive(rxBuf, sizeof(rxBuf));
 
@@ -191,9 +241,16 @@ void loop() {
         }
         Serial.println();
 
+        if (len == SETTINGS_REQUEST_ENC_SIZE) {
+            handleSettingsRequest(rxBuf, len);
+            return;
+        }
+
         if (len != ENCRYPTED_SIZE) {
             Serial.print("[LoRa] Unexpected length (expected ");
             Serial.print(ENCRYPTED_SIZE);
+            Serial.print(" or ");
+            Serial.print(SETTINGS_REQUEST_ENC_SIZE);
             Serial.println(") — dropping packet");
             return;
         }
