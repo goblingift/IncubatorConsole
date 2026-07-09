@@ -1,0 +1,14 @@
+flowchart TD
+    A[1. Boot &amp; init\nload settings from NVS] --> B[2. Read sensors\nevery 10s]
+    B --> C[3. Evaluate control logic\ncheck thresholds]
+    C --> D[4. Drive actuators\nfan / heater / humidifier]
+    D --> X{Contain\n6 sensor\nreadings?}
+    X -->|no| B
+    X -->|yes| E[5. Buffer &amp; transmit via LoRa\nAES-GCM encrypted]
+    E --> B
+
+    F[6. Sync settings from cloud\nevery 15s via gateway] -.-> C
+
+    G[7. Track sound levels\ncontinuous background task] -.-> B
+
+    B --> H[8. Update display\nreadings or alert screen]

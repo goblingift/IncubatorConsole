@@ -1,0 +1,128 @@
+%%{init: {"flowchart": {"htmlLabels": true, "curve": "linear"}} }%%
+flowchart TD
+
+    %% ===================== BOOT / SETUP =====================
+    Start([Power on / Reset]) --> Setup["setup()\nSerial, Wire(I2C), mutexes\ninit sensors, RTC, HX711, relay, ADXL345\ninit SX1262 LoRa radio, OLED"]
+    Setup --> LoadSettings{"Settings found\nin NVS?"}
+    LoadSettings -->|yes| UseNvs["Load ControlSettings\nfrom NVS"]
+    LoadSettings -->|no| UseDefaults["Use built-in\ndefault thresholds"]
+    UseNvs --> SpawnTasks
+    UseDefaults --> SpawnTasks
+
+    SpawnTasks["Spawn 4 pinned FreeRTOS tasks\n(core 1) + idle loop() on core 0"]
+    SpawnTasks --> T1(( ))
+    SpawnTasks --> T2(( ))
+    SpawnTasks --> T3(( ))
+    SpawnTasks --> T4(( ))
+
+    %% ===================== SOUND TASK =====================
+    subgraph SND["SoundRecorder Task (continuous)"]
+        direction TB
+        S1["Sample ADC (sound sensor)\n32x, average, every 10ms\nfor a 10s window"]
+        S2["Track peak loudness\nover the window"]
+        S3["Publish g_highestLoudness\n(volatile, shared)"]
+        S1 --> S2 --> S1
+        S2 -. window elapsed .-> S3 --> S1
+    end
+    T1 --> S1
+
+    %% ===================== SENSOR READING + CONTROL TASK =====================
+    subgraph SENSOR["SensorReading Task — 10s cycle"]
+        direction TB
+        R1["Read INA260 (V, A), TSL2561 (lux)\n[i2c mutex]"]
+        R2["SCD41: start single-shot measurement\n[i2c mutex] then release bus"]
+        R3["Wait ~4.9s (bus free for Display task)\nthen poll getDataReadyStatus"]
+        R4{"CO2/Temp/RH\nready & valid?"}
+        R5["Read CO2, Temp, Humidity\n[i2c mutex]"]
+        R6["Mark scdValid = false\ncapture error string"]
+        R7["Read ADXL345 accel -> pitch/roll\nRead water level (I2C), HX711 weight (GPIO)\nRead RTC timestamp"]
+        R8["Log full reading block\nto Serial"]
+        R9["Snapshot current ControlSettings\n[settings mutex]"]
+        R10["ControlLogic::evaluate()\nthreshold checks vs settings"]
+        R11{"scdValid?"}
+        R12["Derive fan/heater/humidifier\nfrom live thresholds\n(CO2, temp, humidity)\n+ collect violation lines"]
+        R13["Hold previous fan/heater state\nHumidifier only if water >= min\nadd 'SCD41 ERR' violation"]
+        R14["Check secondary thresholds:\nsound, weight, pitch, roll,\nvoltage, current, water level"]
+        R15["alertOn = (violationCount > 0)"]
+        R16{"Actuator state\nchanged?"}
+        R17["Switch relays (fan/heater/alert LED)\nand humidifier GPIO\n[i2c mutex for relay]"]
+        R18["Build packed SensorReading\nand append to LoRaPayload buffer"]
+        R19{"Buffer holds\n6 readings?"}
+        R20["AES-128-GCM encrypt payload\n[radio mutex]"]
+        R21{"LoRa radio OK?"}
+        R22["Transmit encrypted packet\nvia SX1262"]
+        R23["Skip TX, log\n'radio not available'"]
+        R24["Reset LoRaPayload buffer"]
+        R25["Publish DisplaySnapshot\n(readings + alert + violation lines)\nto Display task"]
+        R26["Sleep until 10s\ncycle elapsed"]
+
+        R1 --> R2 --> R3 --> R4
+        R4 -->|yes| R5 --> R8
+        R4 -->|no/timeout| R6 --> R8
+        R8 --> R7 --> R9 --> R10
+        R10 --> R11
+        R11 -->|valid| R12
+        R11 -->|invalid| R13
+        R12 --> R14
+        R13 --> R14
+        R14 --> R15 --> R16
+        R16 -->|yes| R17 --> R18
+        R16 -->|no| R18
+        R18 --> R19
+        R19 -->|no| R25
+        R19 -->|yes| R20 --> R21
+        R21 -->|yes| R22 --> R24
+        R21 -->|no| R23 --> R24
+        R24 --> R25 --> R26 --> R1
+    end
+    T2 --> R1
+
+    %% ===================== SETTINGS SYNC TASK =====================
+    subgraph SYNC["SettingsSync Task — 15s poll"]
+        direction TB
+        Y1{"LoRa radio\navailable?"}
+        Y2["Build SettingsRequest\nwith current settingsVersion (CRC32)"]
+        Y3["AES-128-GCM encrypt request\n[radio mutex]"]
+        Y4["Transmit request to gateway"]
+        Y5["Listen up to 2s\nfor encrypted reply"]
+        Y6{"Reply\nreceived?"}
+        Y7["Decrypt SettingsResponse"]
+        Y8{"msgType, deviceId,\nCRC valid?"}
+        Y9["Apply new settings\n[settings mutex]\nPersist to NVS if changed"]
+        Y10["Log: invalid response,\nignore"]
+        Y11{"Timeout or\nRX error?"}
+        Y12["Log: up to date /\ngateway offline"]
+        Y13["Log: RX error"]
+        Y14["Sleep 15s"]
+
+        Y1 -->|yes| Y2 --> Y3 --> Y4 --> Y5 --> Y6
+        Y1 -->|no| Y14
+        Y6 -->|yes| Y7 --> Y8
+        Y8 -->|yes| Y9 --> Y14
+        Y8 -->|no| Y10 --> Y14
+        Y6 -->|no| Y11
+        Y11 -->|timeout| Y12 --> Y14
+        Y11 -->|error| Y13 --> Y14
+        Y14 --> Y1
+    end
+    T3 --> Y1
+
+    %% ===================== DISPLAY TASK =====================
+    subgraph DISP["Display Task — ~5s refresh"]
+        direction TB
+        D1["Wait for new\nDisplaySnapshot"]
+        D2{"Alert\nactive?"}
+        D3["Render alert screen\nwith violation lines"]
+        D4["Render normal readings screen\n(T, RH, CO2, V/A, clock)"]
+        D5["Push frame to OLED\n[i2c mutex]"]
+        D1 --> D2
+        D2 -->|yes| D3 --> D5
+        D2 -->|no| D4 --> D5
+        D5 --> D1
+    end
+    T4 --> D1
+    R25 -. publish .-> D1
+
+    %% ===================== CROSS-TASK SHARED STATE =====================
+    R9 -. reads .-> Y9
+    R17 -. g_actuatorState .-> R18

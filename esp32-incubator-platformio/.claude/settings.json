@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cd \"c:\\\\development\\\\git\\\\IncubatorConsole\\\\esp32-incubator-platformio\"; npx --yes @mermaid-js/mermaid-cli -i docs/firmware_activity_diagram.mmd -o \"$env:TEMP\\\\test_diagram.svg\" 2>&1 | Select-Object -Last 60)",
+      "Bash(which node *)",
+      "Read(//c/Program Files/**)",
+      "Skill(artifact-design)",
+      "Skill(artifact-design:*)",
+      "WebFetch(domain:cdn.jsdelivr.net)",
+      "Bash(curl -sL https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js -o C:/Users/andre/AppData/Local/Temp/claude/c--development-git-IncubatorConsole-esp32-incubator-platformio/b569da1b-1492-4239-8b61-90fe562a5973/scratchpad/mermaid.min.js)",
+      "Bash(python3 -)",
+      "Bash(iconv -f utf-8 -t utf-8 C:/Users/andre/AppData/Local/Temp/claude/c--development-git-IncubatorConsole-esp32-incubator-platformio/b569da1b-1492-4239-8b61-90fe562a5973/scratchpad/mermaid.min.js)",
+      "Bash(python3 -c \"print\\(\\)\")",
+      "Bash(dd if=__TRACKED_VAR__/mermaid.min.js bs=1 skip=__TRACKED_VAR__ count=200)",
+      "WebFetch(domain:claude.ai)",
+      "Bash(grep -n \"end$\" \"c:/development/git/IncubatorConsole/esp32-incubator-platformio/docs/firmware_activity_diagram.mmd\")"
+    ]
+  }
+}
