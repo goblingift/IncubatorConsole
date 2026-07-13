@@ -49,6 +49,21 @@ static WifiManager     wifiManager;
 static AwsIotClient    awsIotClient;
 static SettingsService settingsService;
 
+// Handed from loop() to publishTask so JSON-building/MQTT-publishing (and
+// their Serial logging) never delay the next radio.receive() call. Before
+// this, that processing ran inline in loop() and created a brief window
+// where the gateway wasn't listening — long enough that the incubator's
+// settings-poll (sent moments after each measurement) regularly landed in
+// it and got lost, along with the occasional measurement batch itself.
+struct PublishJob {
+    SensorReading readings[READING_COUNT];
+    float         rssi;
+    float         snr;
+    uint8_t       raw[ENCRYPTED_SIZE];
+    uint8_t       rawLen;
+};
+static QueueHandle_t publishQueue;
+
 // Formats the on-wire numeric device ID into the string form used throughout
 // the AWS backend (DynamoDB partition key, API paths, etc.), e.g. 1 -> "incubator-01".
 // Kept in the gateway rather than the incubator sender since the LoRa payload
@@ -141,6 +156,38 @@ void publishReadingsToAws(SensorReading* readings, uint8_t count) {
     }
 }
 
+// Background task: does all the slow/Serial-heavy work for a received
+// measurement batch (hex dump, JSON, MQTT publish) off the radio-receive
+// path. Also services the MQTT keepalive on the same idle tick, since
+// awsIotClient must only ever be touched from one task.
+void publishTask(void* param) {
+    for (;;) {
+        PublishJob job;
+        if (xQueueReceive(publishQueue, &job, pdMS_TO_TICKS(1000)) == pdTRUE) {
+            Serial.println();
+            Serial.print("[LoRa] Received ");
+            Serial.print(job.rawLen);
+            Serial.print(" bytes  RSSI: ");
+            Serial.print(job.rssi);
+            Serial.print(" dBm  SNR: ");
+            Serial.print(job.snr);
+            Serial.println(" dB");
+
+            Serial.print("[LoRa] Raw bytes: ");
+            for (uint8_t i = 0; i < job.rawLen; i++) {
+                if (job.raw[i] < 0x10) Serial.print('0');
+                Serial.print(job.raw[i], HEX);
+            }
+            Serial.println();
+
+            printReceivedJson(job.readings, READING_COUNT, job.rssi, job.snr);
+            publishReadingsToAws(job.readings, READING_COUNT);
+        } else {
+            awsIotClient.loop();
+        }
+    }
+}
+
 // Answers a decrypted-and-valid FETCH_SETTINGS poll. Stays silent (= "you are
 // up to date") when the cache is empty or the versions already match; the
 // incubator only expects a reply when something changed.
@@ -191,6 +238,12 @@ void setup() {
 
     wifiManager.begin();
     awsIotClient.begin();
+    settingsService.begin();
+
+    publishQueue = xQueueCreate(4, sizeof(PublishJob));
+    // Core 0, alongside WiFi/TLS — keeps core 1's radio.receive() loop free
+    // of any JSON/MQTT/Serial work.
+    xTaskCreatePinnedToCore(publishTask, "Publish", 8192, nullptr, 1, nullptr, 0);
 
     // Nonce domain 0x01: the gateway encrypts settings responses under the
     // same pre-shared key as the incubator (domain 0x00) — the domain byte
@@ -215,8 +268,11 @@ void setup() {
 
 void loop() {
     wifiManager.loop();
-    awsIotClient.loop();
-    settingsService.loop(wifiManager.isConnected());
+    // Cloud settings refresh and AWS IoT publishing both run in their own
+    // background tasks (see SettingsService::begin and publishTask) so this
+    // loop only ever does radio I/O — radio.receive() below is called again
+    // essentially immediately after every reception, with no processing or
+    // network-I/O gap in between where a fast-follow-up packet could be lost.
 
     int state = radio.receive(rxBuf, sizeof(rxBuf));
 
@@ -225,33 +281,15 @@ void loop() {
         float  rssi = radio.getRSSI();
         float  snr  = radio.getSNR();
 
-        Serial.println();
-        Serial.print("[LoRa] Received ");
-        Serial.print(len);
-        Serial.print(" bytes  RSSI: ");
-        Serial.print(rssi);
-        Serial.print(" dBm  SNR: ");
-        Serial.print(snr);
-        Serial.println(" dB");
-
-        Serial.print("[LoRa] Raw bytes: ");
-        for (size_t i = 0; i < len; i++) {
-            if (rxBuf[i] < 0x10) Serial.print('0');
-            Serial.print(rxBuf[i], HEX);
-        }
-        Serial.println();
-
         if (len == SETTINGS_REQUEST_ENC_SIZE) {
             handleSettingsRequest(rxBuf, len);
             return;
         }
 
         if (len != ENCRYPTED_SIZE) {
-            Serial.print("[LoRa] Unexpected length (expected ");
-            Serial.print(ENCRYPTED_SIZE);
-            Serial.print(" or ");
-            Serial.print(SETTINGS_REQUEST_ENC_SIZE);
-            Serial.println(") — dropping packet");
+            Serial.print("[LoRa] Unexpected length ");
+            Serial.print(len);
+            Serial.println(" — dropping packet");
             return;
         }
 
@@ -261,11 +299,15 @@ void loop() {
             return;
         }
 
-        SensorReading readings[READING_COUNT];
-        memcpy(readings, plainBuf, PACKET_SIZE);
-
-        printReceivedJson(readings, READING_COUNT, rssi, snr);
-        publishReadingsToAws(readings, READING_COUNT);
+        PublishJob job;
+        memcpy(job.readings, plainBuf, PACKET_SIZE);
+        job.rssi   = rssi;
+        job.snr    = snr;
+        job.rawLen = (uint8_t)len;
+        memcpy(job.raw, rxBuf, len);
+        if (xQueueSend(publishQueue, &job, 0) != pdTRUE) {
+            Serial.println("[Publish] Queue full — dropping batch");
+        }
     } else if (state != RADIOLIB_ERR_RX_TIMEOUT) {
         Serial.print("[LoRa] Receive error: ");
         Serial.println(state);

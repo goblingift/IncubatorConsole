@@ -420,7 +420,8 @@ void sensorReadingTask(void *parameter) {
     if (loraPayload->isReady()) {
         size_t encLen = 0;
         // Radio mutex covers crypto too: the AesGcm instance is shared with
-        // the settings-sync task. Worst-case wait is its ~2 s listen window.
+        // the settings-sync task, which only wakes right after this block
+        // (see the notify below) so it never contends with this TX.
         xSemaphoreTake(g_radioMutex, portMAX_DELAY);
         if (aesGcm->encrypt(loraPayload->data(), loraPayload->size(), encryptedBuf, encLen)) {
             Serial.print("LoRa packet ready: ");
@@ -452,6 +453,10 @@ void sensorReadingTask(void *parameter) {
         }
         xSemaphoreGive(g_radioMutex);
         loraPayload->reset();
+
+        // Piggyback the settings poll on the measurement cadence (~60 s)
+        // instead of an independent timer — see SettingsSync.cpp.
+        xTaskNotifyGive(settingsSyncTaskHandle);
     }
 
     // --- hand the cycle's results to the display task ---

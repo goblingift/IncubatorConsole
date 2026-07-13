@@ -47,7 +47,8 @@
       "Bash(git -C /Users/goblingift/GitHub/IncubatorConsole log --oneline -- esp32-incubator-platformio/src/ControlLogic.cpp)",
       "Bash(git -C /Users/goblingift/GitHub/IncubatorConsole status --porcelain -- esp32-incubator-platformio/src/)",
       "Bash(find /Users/goblingift/Documents/Arduino/libraries/RadioLib -iname \"*SX126x*\" 2>/dev/null)",
-      "Read(//Users/goblingift/Documents/Arduino/libraries/RadioLib/**)"
+      "Read(//Users/goblingift/Documents/Arduino/libraries/RadioLib/**)",
+      "Bash(git -C /Users/goblingift/GitHub/IncubatorConsole status --porcelain esp32-incubator-platformio/src esp32-gateway-platformio/src)"
     ],
     "additionalDirectories": [
       "/Users/goblingift/GitHub/Grove_Sensor_Measurement_v1/SimpleRTC"

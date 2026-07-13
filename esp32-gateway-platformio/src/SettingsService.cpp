@@ -1,4 +1,5 @@
 #include "SettingsService.h"
+#include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
@@ -21,28 +22,65 @@ SettingsService::Entry* SettingsService::find(uint8_t deviceId) {
 }
 
 bool SettingsService::get(uint8_t deviceId, SettingsResponse& out) {
+    xSemaphoreTake(mutex_, portMAX_DELAY);
     Entry* e = find(deviceId);
-    if (!e || !e->valid) return false;
-    out = e->resp;
-    return true;
+    bool ok = e && e->valid;
+    if (ok) out = e->resp;
+    xSemaphoreGive(mutex_);
+    return ok;
 }
 
-void SettingsService::loop(bool wifiConnected) {
-    if (!wifiConnected) return;
-    unsigned long now = millis();
-    for (auto& e : entries_) {
-        if (!e.used) continue;
-        if (e.lastAttemptMs != 0 && now - e.lastAttemptMs < REFRESH_MS) continue;
-        e.lastAttemptMs = now;
-        fetch(e);
-        break;  // at most one blocking fetch per call keeps LoRa blindness bounded
+void SettingsService::begin() {
+    mutex_ = xSemaphoreCreateMutex();
+    // Pinned to core 0, alongside the WiFi/TLS stack, so the blocking HTTPS
+    // fetch can never delay core 1's radio.receive() loop.
+    xTaskCreatePinnedToCore(taskTrampoline, "SettingsFetch", 8192, this, 1, nullptr, 0);
+}
+
+void SettingsService::taskTrampoline(void* param) {
+    static_cast<SettingsService*>(param)->taskBody();
+}
+
+void SettingsService::taskBody() {
+    for (;;) {
+        uint8_t deviceId = 0;
+        bool    due = false;
+
+        xSemaphoreTake(mutex_, portMAX_DELAY);
+        unsigned long now = millis();
+        for (auto& e : entries_) {
+            if (!e.used) continue;
+            if (e.lastAttemptMs != 0 && now - e.lastAttemptMs < REFRESH_MS) continue;
+            e.lastAttemptMs = now;  // mark attempted now so a slow/failed fetch isn't retried immediately
+            deviceId = e.deviceId;
+            due = true;
+            break;  // at most one fetch per tick
+        }
+        xSemaphoreGive(mutex_);
+
+        if (due && WiFi.status() == WL_CONNECTED) {
+            SettingsResponse fetched;
+            if (fetchOverHttp(deviceId, fetched)) {
+                xSemaphoreTake(mutex_, portMAX_DELAY);
+                Entry* e = find(deviceId);
+                bool changed = !e->valid || fetched.settingsVersion != e->resp.settingsVersion;
+                e->resp  = fetched;
+                e->valid = true;
+                xSemaphoreGive(mutex_);
+                Serial.printf("[Settings] Fetched device %u, version 0x%08lX%s\n",
+                              deviceId, (unsigned long)fetched.settingsVersion,
+                              changed ? " (changed)" : " (unchanged)");
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(TASK_TICK_MS));
     }
 }
 
-bool SettingsService::fetch(Entry& e) {
+bool SettingsService::fetchOverHttp(uint8_t deviceId, SettingsResponse& out) {
     char url[160];
     int n = snprintf(url, sizeof(url), "https://%s", SETTINGS_API_HOST);
-    snprintf(url + n, sizeof(url) - n, SETTINGS_API_PATH_FMT, e.deviceId);
+    snprintf(url + n, sizeof(url) - n, SETTINGS_API_PATH_FMT, deviceId);
 
     WiFiClientSecure client;
     client.setCACert(AWS_IOT_ROOT_CA);
@@ -73,7 +111,7 @@ bool SettingsService::fetch(Entry& e) {
     // values match the backend's DEFAULT_SETTINGS for missing fields.
     SettingsResponse r = {};
     r.msgType        = SETTINGS_MSG_RESPONSE;
-    r.deviceId       = e.deviceId;
+    r.deviceId       = deviceId;
     r.temperatureMin = (int16_t) lroundf((doc["temperature_min"] | 36.0f)   * 100.0f);
     r.temperatureMax = (int16_t) lroundf((doc["temperature_max"] | 39.0f)   * 100.0f);
     r.humidityMin    = (uint16_t)lroundf((doc["humidity_min"]    | 45.0f)   * 100.0f);
@@ -93,11 +131,6 @@ bool SettingsService::fetch(Entry& e) {
     r.waterLevelMax  = (uint8_t) lroundf( doc["water_level_max"] | 100.0f);
     r.settingsVersion = settingsCrc32(r);
 
-    bool changed = !e.valid || r.settingsVersion != e.resp.settingsVersion;
-    e.resp  = r;
-    e.valid = true;
-    Serial.printf("[Settings] Fetched device %u, version 0x%08lX%s\n",
-                  e.deviceId, (unsigned long)r.settingsVersion,
-                  changed ? " (changed)" : " (unchanged)");
+    out = r;
     return true;
 }

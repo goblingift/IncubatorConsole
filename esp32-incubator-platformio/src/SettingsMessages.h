@@ -5,8 +5,9 @@
 
 // LoRa settings-sync protocol between the incubator node and the gateway.
 //
-// The incubator polls the gateway every 15 s with a SettingsRequest carrying
-// the CRC32 of the settings it currently runs. The gateway answers with a
+// The incubator polls the gateway right after each measurement batch it
+// transmits (~every 60 s) with a SettingsRequest carrying the CRC32 of the
+// settings it currently runs. The gateway answers with a
 // SettingsResponse ONLY when its cloud-fetched copy differs — silence means
 // "up to date" (or gateway offline; the node keeps running on its NVS copy).
 //

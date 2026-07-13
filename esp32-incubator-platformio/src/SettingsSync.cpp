@@ -2,7 +2,6 @@
 #include "IncubatorSettings.h"
 
 namespace {
-constexpr uint32_t POLL_INTERVAL_MS  = 15000;
 constexpr uint32_t LISTEN_TIMEOUT_MS = 2000;
 }
 
@@ -10,6 +9,12 @@ void settingsSyncTask(void* param) {
     auto* ctx = static_cast<SettingsSyncContext*>(param);
 
     for (;;) {
+        // Waits here until sensorReadingTask notifies us right after
+        // transmitting a measurement batch (~every 60 s). Piggybacking on
+        // that cadence instead of an independent timer keeps settings-sync
+        // airtime a small fraction of the measurement path's own duty cycle.
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
         if (*ctx->loraOk) {
             SettingsRequest req;
             req.msgType  = SETTINGS_MSG_REQUEST;
@@ -72,6 +77,5 @@ void settingsSyncTask(void* param) {
                 Serial.printf("[SettingsSync] RX error (code %d)\n", rxState);
             }
         }
-        vTaskDelay(pdMS_TO_TICKS(POLL_INTERVAL_MS));
     }
 }

@@ -16,8 +16,12 @@ struct SettingsSyncContext {
     bool*             loraOk;
 };
 
-// FreeRTOS task body: polls the gateway with a FETCH_SETTINGS request every
-// 15 s, listens ~2 s for a reply, and applies + persists it if one arrives.
-// Gateway silence means "up to date" (or gateway offline) — the node keeps
-// running on its current settings. param = SettingsSyncContext*.
+// FreeRTOS task body: blocks on a task notification and polls the gateway
+// with a FETCH_SETTINGS request each time one arrives, listening ~2 s for a
+// reply and applying + persisting it if one comes back. sensorReadingTask
+// notifies this task right after transmitting a measurement batch (see
+// main.cpp), so polls piggyback on that ~60 s cadence instead of running on
+// an independent timer. Gateway silence means "up to date" (or gateway
+// offline) — the node keeps running on its current settings.
+// param = SettingsSyncContext*.
 void settingsSyncTask(void* param);
