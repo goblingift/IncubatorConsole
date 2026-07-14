@@ -71,7 +71,7 @@ function formatValue(value, field) {
 
 export default function MeasurementHistoryChart() {
     const { selectedDeviceId } = useDevice();
-    const [range, setRange] = useState("24h");
+    const [range, setRange] = useState("1h");
     const [selectedKey, setSelectedKey] = useState(DEFAULT_FIELD_KEY);
     const [view, setView] = useState("chart");
 
