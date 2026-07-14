@@ -12,7 +12,7 @@ export default function SensorDashboard() {
     if (loading)           return <p className="text-gray-400 text-sm">Loading sensor data…</p>;
     if (error)             return <p className="text-red-500 text-sm">Error: {error}</p>;
 
-    const timestamp = new Date(Number(data.timestamp)).toLocaleString("en-US");
+    const timestamp = new Date(Number(data.timestamp) * 1000).toLocaleString("en-US");
 
     return (
         <div className="space-y-4">

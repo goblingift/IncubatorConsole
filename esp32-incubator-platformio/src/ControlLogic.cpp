@@ -38,19 +38,16 @@ ControlResult evaluate(const Measurements& m, const ControlSettings& s,
                      || (m.temperature > s.temperatureMax)
                      || (m.humidity > s.humidityMax);
         r.heaterOn = (m.temperature < s.temperatureMin);
-        // Dry-run guard: never run the humidifier below the water minimum.
-        r.humidifierOn = (m.humidity < s.humidityMin)
-                         && (m.waterLevel >= s.waterLevelMin);
+        r.humidifierOn = (m.humidity < s.humidityMin);
 
         checkRangeF(r, "T",   m.temperature, s.temperatureMin, s.temperatureMax);
         checkRangeF(r, "Hum", m.humidity,    s.humidityMin,    s.humidityMax);
         if (m.co2 > s.co2Max) addLine(r, "CO2 %u>%d", m.co2, (int)s.co2Max);
     } else {
-        // Hold the previous actuator states rather than reacting to garbage;
-        // the water guard still applies while holding the humidifier on.
+        // Hold the previous actuator states rather than reacting to garbage.
         r.fanOn        = prevFan;
         r.heaterOn     = prevHeater;
-        r.humidifierOn = prevHumidifier && (m.waterLevel >= s.waterLevelMin);
+        r.humidifierOn = prevHumidifier;
         addLine(r, "SCD41 ERR");
     }
 

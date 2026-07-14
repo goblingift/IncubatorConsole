@@ -48,7 +48,14 @@
       "Bash(git -C /Users/goblingift/GitHub/IncubatorConsole status --porcelain -- esp32-incubator-platformio/src/)",
       "Bash(find /Users/goblingift/Documents/Arduino/libraries/RadioLib -iname \"*SX126x*\" 2>/dev/null)",
       "Read(//Users/goblingift/Documents/Arduino/libraries/RadioLib/**)",
-      "Bash(git -C /Users/goblingift/GitHub/IncubatorConsole status --porcelain esp32-incubator-platformio/src esp32-gateway-platformio/src)"
+      "Bash(git -C /Users/goblingift/GitHub/IncubatorConsole status --porcelain esp32-incubator-platformio/src esp32-gateway-platformio/src)",
+      "Bash(find ~/.platformio -iname \"*default*8MB*.csv\" -o -iname \"*default_16MB*.csv\" 2>/dev/null | grep -i espressif | head -20)",
+      "Read(//Users/goblingift/.platformio/**)",
+      "Bash(find ~/.platformio/platforms -iname \"seeed_xiao_esp32s3.json\" 2>/dev/null)",
+      "Read(//Users/goblingift/.platformio/platforms/**)",
+      "Bash(cat /Users/goblingift/GitHub/IncubatorAWS/incubator-latest-reading/lambda_function.py)",
+      "Read(//Users/goblingift/GitHub/IncubatorAWS/incubator-latest-reading/**)",
+      "Bash(ls /Users/goblingift/GitHub/IncubatorAWS/incubator-latest-reading/)"
     ],
     "additionalDirectories": [
       "/Users/goblingift/GitHub/Grove_Sensor_Measurement_v1/SimpleRTC"

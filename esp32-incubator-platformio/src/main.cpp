@@ -19,6 +19,7 @@
 #include "SettingsSync.h"
 #include "ControlLogic.h"
 #include "DisplayUi.h"
+#include "SerialLogger.h"
 
 U8G2_SH1107_SEEED_128X128_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 DS1307 rtc;
@@ -131,7 +132,10 @@ void sensorReadingTask(void *parameter);
 
 void setup() {
   Serial.begin(9600);
-  delay(5000);
+
+  SerialLogger::beginFilesystem();
+  SerialLogger::startNewLogFile();
+
   Wire.begin();
   Wire.setTimeOut(1000);
 
@@ -224,6 +228,8 @@ void setup() {
   delay(2000);
 
   displayUi.begin(&u8g2, g_i2cMutex);
+
+  SerialLogger::runStartupPrompt();  // blocks up to 10s; never returns if a command was entered
 
   xTaskCreatePinnedToCore(
     soundRecorderTask,
