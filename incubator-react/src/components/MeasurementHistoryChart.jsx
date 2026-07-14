@@ -14,6 +14,7 @@ import { MEASUREMENT_FIELDS, MEASUREMENT_FIELDS_BY_KEY } from "../constants/meas
 
 const RANGES = [
     { key: "1h", label: "Last Hour" },
+    { key: "2h", label: "Last 2 Hours" },
     { key: "24h", label: "Last 24h" },
     { key: "7d", label: "Last 7 Days" },
 ];
