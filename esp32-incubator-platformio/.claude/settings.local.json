@@ -55,7 +55,14 @@
       "Read(//Users/goblingift/.platformio/platforms/**)",
       "Bash(cat /Users/goblingift/GitHub/IncubatorAWS/incubator-latest-reading/lambda_function.py)",
       "Read(//Users/goblingift/GitHub/IncubatorAWS/incubator-latest-reading/**)",
-      "Bash(ls /Users/goblingift/GitHub/IncubatorAWS/incubator-latest-reading/)"
+      "Bash(ls /Users/goblingift/GitHub/IncubatorAWS/incubator-latest-reading/)",
+      "Bash(aws sts *)",
+      "Bash(aws configure *)",
+      "Bash(aws sns *)",
+      "Bash(grep -rn \"sns\\\\|SNS\\\\|arn:aws:sns\" /Users/goblingift/GitHub/IncubatorAWS/incubator-threshold-alert/config.py /Users/goblingift/GitHub/IncubatorAWS/incubator-light-average-alert/config.py /Users/goblingift/GitHub/IncubatorAWS/incubator-measurements-rejected-alert/config.py 2>/dev/null)",
+      "Read(//Users/goblingift/GitHub/IncubatorAWS/incubator-threshold-alert/**)",
+      "Bash(shasum -a 256 /Users/goblingift/GitHub/IncubatorConsole/esp32-incubator-platformio/.pio/build/seeed_xiao_esp32s3/firmware.elf)",
+      "Bash(~/.platformio/penv/bin/pio device *)"
     ],
     "additionalDirectories": [
       "/Users/goblingift/GitHub/Grove_Sensor_Measurement_v1/SimpleRTC"
