@@ -1,4 +1,5 @@
 import SensorDashboard from '../components/SensorDashboard';
+import BatteryStatus from '../components/BatteryStatus';
 import MeasurementHistoryChart from '../components/MeasurementHistoryChart';
 
 export default function DashboardPage() {
@@ -7,6 +8,10 @@ export default function DashboardPage() {
             <div className="bg-white p-8 rounded-2xl shadow-xl">
                 <h2 className="text-2xl font-semibold text-gray-700 mb-4">Current Values</h2>
                 <SensorDashboard />
+            </div>
+            <div className="bg-white p-8 rounded-2xl shadow-xl">
+                <h2 className="text-2xl font-semibold text-gray-700 mb-4">Battery Status</h2>
+                <BatteryStatus />
             </div>
             <div className="bg-white p-8 rounded-2xl shadow-xl">
                 <h2 className="text-2xl font-semibold text-gray-700 mb-4">Measurement History</h2>
