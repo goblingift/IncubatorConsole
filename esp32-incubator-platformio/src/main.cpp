@@ -381,6 +381,7 @@ void sensorReadingTask(void *parameter) {
     bool prevHumid  = g_actuatorState & HUMIDIFIER_BIT;
 
     ControlResult ctl = ControlLogic::evaluate(m, cs, prevFan, prevHeater, prevHumid);
+    ctl.humidifierOn = ControlLogic::applyHumidifierRestCycle(ctl.humidifierOn, millis());
 
     // Switch relays only on state change, before the reading is built below
     // so its actuatorState already carries the new states.
@@ -632,10 +633,13 @@ int WTR_LVL_readPercent() {
     if (WTR_LVL_highData[i] > WTR_LVL_THRESHOLD) WTR_LVL_mask |= (1UL << (8 + i));
   }
 
+  // Use the highest wet segment rather than requiring an unbroken run from
+  // segment 0 — segments 0-1 are a confirmed permanent dead zone on this
+  // sensor (never read wet at any fill level, including 100% full), so a
+  // contiguous-from-zero count could never produce anything but 0%.
   byte WTR_LVL_sections = 0;
-  while (WTR_LVL_mask & 1) {
-    WTR_LVL_sections++;
-    WTR_LVL_mask >>= 1;
+  for (byte i = 0; i < 20; i++) {
+    if (WTR_LVL_mask & (1UL << i)) WTR_LVL_sections = i + 1;
   }
 
   return WTR_LVL_sections * 5;

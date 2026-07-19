@@ -35,4 +35,13 @@ namespace ControlLogic {
     // fan/heater/humidifier states are held instead of reacting to garbage.
     ControlResult evaluate(const Measurements& m, const ControlSettings& s,
                            bool prevFan, bool prevHeater, bool prevHumidifier);
+
+    // Enforces a rest period after continuous operation: some humidifiers
+    // stop working correctly if driven for many consecutive minutes. Call
+    // once per sensor cycle with evaluate()'s ControlResult.humidifierOn and
+    // the current millis(); returns the state to actually apply. Holds its
+    // own timing state (function-local statics) across calls — there is
+    // only ever one caller (sensorReadingTask), so this is safe without a
+    // mutex, unlike state shared across tasks.
+    bool applyHumidifierRestCycle(bool desiredOn, uint32_t nowMs);
 }

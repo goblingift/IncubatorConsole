@@ -73,4 +73,43 @@ ControlResult evaluate(const Measurements& m, const ControlSettings& s,
     return r;
 }
 
+bool applyHumidifierRestCycle(bool desiredOn, uint32_t nowMs) {
+    static constexpr uint32_t MAX_ON_MS  = 60000;  // 1 minute continuous run before a forced rest
+    // Requested rest is 5s, but this is only checked once per ~10s sensor
+    // cycle, so the actual rest ends up being about one full cycle (~10-20s)
+    // rather than exactly 5s — acceptable for hardware cooldown purposes.
+    static constexpr uint32_t REST_MS   = 5000;
+
+    static bool     resting      = false;
+    static bool     wasOn        = false;
+    static uint32_t stateSinceMs = 0;
+
+    if (!desiredOn) {
+        resting = false;
+        wasOn   = false;
+        return false;
+    }
+
+    if (resting) {
+        if (nowMs - stateSinceMs < REST_MS) return false;
+        resting = false;
+        // Falls through to start a fresh run below.
+    }
+
+    if (!wasOn) {
+        wasOn        = true;
+        stateSinceMs = nowMs;
+        return true;
+    }
+
+    if (nowMs - stateSinceMs >= MAX_ON_MS) {
+        resting      = true;
+        wasOn        = false;
+        stateSinceMs = nowMs;
+        return false;
+    }
+
+    return true;
+}
+
 }  // namespace ControlLogic
