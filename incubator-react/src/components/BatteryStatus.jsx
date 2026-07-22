@@ -24,9 +24,12 @@ export default function BatteryStatus() {
     }
 
     const severity = severityFor(data.battery_percent);
+    const timestamp = new Date(data.timestamp * 1000).toLocaleString("en-US");
 
     return (
         <div className="space-y-4">
+            <p className="text-xs text-gray-400">Last reading: 🕐 {timestamp}</p>
+
             {!data.curve_calibrated && (
                 <p className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                     <span aria-hidden="true">⚠</span>
