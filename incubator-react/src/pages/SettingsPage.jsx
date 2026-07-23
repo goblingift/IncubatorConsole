@@ -22,6 +22,7 @@ const DEFAULTS = {
     current_max:        2,
     water_level_min:    10,
     water_level_max:    100,
+    battery_percent_min: 20,
 };
 
 export default function SettingsPage() {
@@ -171,6 +172,10 @@ export default function SettingsPage() {
             <Section title="Water Level">
                 <SliderRow label="Minimum" value={settings.water_level_min} onChange={set('water_level_min')} min={0} max={100} step={1} unit="%" />
                 <SliderRow label="Maximum" value={settings.water_level_max} onChange={set('water_level_max')} min={0} max={100} step={1} unit="%" />
+            </Section>
+
+            <Section title="Battery">
+                <SliderRow label="Minimum" value={settings.battery_percent_min} onChange={set('battery_percent_min')} min={0} max={100} step={1} unit="%" />
             </Section>
 
             <div className="flex items-center gap-3 pt-2 border-t border-zinc-100">

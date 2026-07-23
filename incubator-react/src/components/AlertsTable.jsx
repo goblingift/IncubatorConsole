@@ -14,6 +14,7 @@ const FIELD_LABELS = {
     voltage: "Voltage",
     current: "Current",
     water_level: "Water Level",
+    battery_percent: "Battery",
 };
 
 const COLUMNS = [
