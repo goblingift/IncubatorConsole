@@ -26,6 +26,20 @@ export function useBatteryStatus(deviceId, intervalMs = 60000) {
 
                 setData(body);
                 setError(null);
+
+                // Logged as a single-line JSON string (not a console.log(obj)
+                // tree) so a multi-hour run's console history can be
+                // selected and copied as one reading per line.
+                console.log(JSON.stringify({
+                    logged_at: new Date().toISOString(),
+                    device_id: deviceId,
+                    status: body.status,
+                    battery_voltage: body.battery_voltage,
+                    battery_percent: body.battery_percent,
+                    drain_rate_percent_per_hour: body.drain_rate_percent_per_hour,
+                    remaining_hours: body.remaining_hours,
+                    predicted_shutdown_at: body.predicted_shutdown_at,
+                }));
             } catch (err) {
                 setError(err.message);
             } finally {
