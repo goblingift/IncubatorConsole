@@ -1,4 +1,5 @@
 import { useSensorData } from "../hooks/useSensorData";
+import { useLightAverage } from "../hooks/useLightAverage";
 import { useDevice } from "../context/DeviceContext";
 import { MEASUREMENT_FIELDS_BY_KEY } from "../constants/measurementFields";
 
@@ -24,6 +25,7 @@ export default function SensorDashboard() {
                 <SensorCard label="CO₂"         value={`${data.co2_ppm} ppm`}            valueColor="text-purple-500" />
                 <SensorCard label="Weight"      value={`${data.weight_gram} g`}          valueColor="text-yellow-500" />
                 <SensorCard label="Light"       value={`${data.light_intensity}`}         valueColor="text-orange-400" />
+                <LightAverageCard deviceId={selectedDeviceId} />
                 <SensorCard label="Sound (raw)" value={`${data.sound_intensity}`}        valueColor="text-gray-600" />
                 <SensorCard label="Voltage"     value={`${data.voltage} V`}              valueColor="text-sky-600" />
                 <SensorCard label="Current"     value={`${data.current} A`}              valueColor="text-indigo-500" />
@@ -55,6 +57,17 @@ function SensorCard({ label, value, valueColor }) {
             <p className={`text-3xl font-bold ${valueColor}`}>{value}</p>
         </div>
     );
+}
+
+function LightAverageCard({ deviceId }) {
+    const { data, loading, error } = useLightAverage(deviceId);
+
+    let value = "…";
+    if (!loading) {
+        value = (error || !data || data.status === "no_data") ? "N/A" : `${data.light_avg_24h}`;
+    }
+
+    return <SensorCard label="Light (24hr avg.)" value={value} valueColor="text-orange-300" />;
 }
 
 function StatusBadge({ label, on }) {
