@@ -10,7 +10,8 @@ const DEFAULTS = {
     humidity_min:       45,
     humidity_max:       70,
     co2_max:            5000,
-    light_avg_max:      500,
+    light_sleep_max:      20,
+    light_sleep_min_hours: 8,
     pitch_deg_max:      15,
     roll_deg_max:       15,
     sound_max:          80,
@@ -139,7 +140,8 @@ export default function SettingsPage() {
             </Section>
 
             <Section title="Lighting">
-                <SliderRow label="24h average maximum" value={settings.light_avg_max} onChange={set('light_avg_max')} min={0} max={2000} step={10} unit="lux" />
+                <SliderRow label="Sleep-friendly max (hourly avg.)" value={settings.light_sleep_max} onChange={set('light_sleep_max')} min={0} max={500} step={5} unit="lux" />
+                <SliderRow label="Minimum sleep-friendly hours (24h)" value={settings.light_sleep_min_hours} onChange={set('light_sleep_min_hours')} min={0} max={24} step={1} unit="h" />
             </Section>
 
             <Section title="Sound (raw sensor value)">

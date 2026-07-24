@@ -25,7 +25,7 @@ export default function SensorDashboard() {
                 <SensorCard label="CO₂"         value={`${data.co2_ppm} ppm`}            valueColor="text-purple-500" />
                 <SensorCard label="Weight"      value={`${data.weight_gram} g`}          valueColor="text-yellow-500" />
                 <SensorCard label="Light"       value={`${data.light_intensity}`}         valueColor="text-orange-400" />
-                <LightAverageCard deviceId={selectedDeviceId} />
+                <LightSleepCard deviceId={selectedDeviceId} />
                 <SensorCard label="Sound (raw)" value={`${data.sound_intensity}`}        valueColor="text-gray-600" />
                 <SensorCard label="Voltage"     value={`${data.voltage} V`}              valueColor="text-sky-600" />
                 <SensorCard label="Current"     value={`${data.current} A`}              valueColor="text-indigo-500" />
@@ -59,15 +59,23 @@ function SensorCard({ label, value, valueColor }) {
     );
 }
 
-function LightAverageCard({ deviceId }) {
+function LightSleepCard({ deviceId }) {
     const { data, loading, error } = useLightAverage(deviceId);
 
-    let value = "…";
-    if (!loading) {
-        value = (error || !data || data.status === "no_data") ? "N/A" : `${data.light_avg_24h}`;
+    if (loading) return <SensorCard label="Sleep-friendly hours (24h)" value="…" valueColor="text-orange-300" />;
+    if (error || !data || data.status === "no_data") {
+        return <SensorCard label="Sleep-friendly hours (24h)" value="N/A" valueColor="text-orange-300" />;
     }
 
-    return <SensorCard label="Light (24hr avg.)" value={value} valueColor="text-orange-300" />;
+    const { sleep_friendly_hours, light_sleep_min_hours, passing } = data;
+    return (
+        <div className="bg-gray-50 rounded-xl p-4">
+            <p className="text-xs text-gray-400 mb-1">Sleep-friendly hours (24h)</p>
+            <p className={`text-3xl font-bold ${passing ? "text-green-600" : "text-red-500"}`}>
+                {sleep_friendly_hours}h <span className="text-base font-normal text-gray-400">/ need {light_sleep_min_hours}h</span>
+            </p>
+        </div>
+    );
 }
 
 function StatusBadge({ label, on }) {
