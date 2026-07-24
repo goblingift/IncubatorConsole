@@ -8,6 +8,7 @@
 struct DisplaySnapshot {
     bool     valid;  // false until the first measurement cycle completes
     float    voltage;
+    uint8_t  batteryPct;  // from BatteryEstimator, based on voltage + heater state
     float    currentA;
     float    temperature;
     float    humidity;

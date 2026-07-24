@@ -19,6 +19,7 @@
 #include "SettingsSync.h"
 #include "ControlLogic.h"
 #include "DisplayUi.h"
+#include "BatteryEstimator.h"
 
 U8G2_SH1107_SEEED_128X128_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 DS1307 rtc;
@@ -286,6 +287,11 @@ void sensorReadingTask(void *parameter) {
     long  lux         = TSL2561.readVisibleLux();
     i2cUnlock();
 
+    // INA260 sensor noise occasionally reads a small negative current at
+    // near-zero draw; there's no such thing as negative current here, so
+    // clamp it rather than let it flap the "Curr < currentMin" alert.
+    if (current_mA < 0.0f) current_mA = 0.0f;
+
     // SCD41 single-shot, split into start/wait/read so the I2C bus stays free
     // during the ~5 s measurement window (the display task needs it every 5 s).
     uint16_t co2 = 0;
@@ -465,6 +471,7 @@ void sensorReadingTask(void *parameter) {
     DisplaySnapshot snap = {};
     snap.valid          = true;
     snap.voltage        = vBus;
+    snap.batteryPct     = BatteryEstimator::estimatePercent(vBus, ctl.heaterOn);
     snap.currentA       = current_mA / 1000.0f;
     snap.temperature    = co2Temp;
     snap.humidity       = rh;

@@ -55,7 +55,7 @@ void DisplayUi::run() {
 
 void DisplayUi::renderNormal(const DisplaySnapshot& s) {
     char vBuf[20], iBuf[20], tBuf[20], hBuf[20], co2Buf[20], timeBuf[6];
-    snprintf(vBuf, sizeof(vBuf), "V:   %.2f V", s.voltage);
+    snprintf(vBuf, sizeof(vBuf), "V:%.1fV %u%%", s.voltage, s.batteryPct);
     snprintf(iBuf, sizeof(iBuf), "I:   %.3f A", s.currentA);
     if (s.scdValid) {
         snprintf(tBuf, sizeof(tBuf), "T:   %.1f C", s.temperature);
